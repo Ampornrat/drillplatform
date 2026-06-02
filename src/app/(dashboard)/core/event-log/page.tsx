@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ScrollText, Activity, AlertTriangle, Info } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { ScrollText, AlertTriangle, Info } from 'lucide-react'
 import { format } from 'date-fns'
 import { th } from 'date-fns/locale'
+import { LogEventForm } from './log-event-form'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Event Log' }
@@ -17,30 +17,35 @@ const severityConfig = {
 
 export default async function EventLogPage() {
   const supabase = await createClient()
-  const { data: events } = await supabase
-    .from('event_log')
-    .select('*')
-    .order('timestamp', { ascending: false })
-    .limit(100)
+
+  const [{ data: events }, { data: drills }] = await Promise.all([
+    supabase
+      .from('event_log')
+      .select('*')
+      .order('timestamp', { ascending: false })
+      .limit(100),
+    supabase
+      .from('drills')
+      .select('id, title, mode, status')
+      .in('status', ['planned', 'active', 'paused'])
+      .order('created_at', { ascending: false }),
+  ])
 
   const criticalCount = (events ?? []).filter((e: { severity: string }) => e.severity === 'critical').length
   const warningCount = (events ?? []).filter((e: { severity: string }) => e.severity === 'warning').length
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <ScrollText className="w-6 h-6 text-green-600" />
-            Event Log
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">บันทึกเหตุการณ์แบบ Real-time สำหรับทุก session</p>
-        </div>
-        <Button>
-          <Activity className="w-4 h-4 mr-2" />
-          บันทึก Event ใหม่
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <ScrollText className="w-6 h-6 text-green-600" />
+          Event Log
+        </h1>
+        <p className="text-gray-500 text-sm mt-1">บันทึกเหตุการณ์แบบ Real-time สำหรับทุก session</p>
       </div>
+
+      {/* Inline log form */}
+      <LogEventForm drills={drills ?? []} />
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4">
@@ -88,7 +93,7 @@ export default async function EventLogPage() {
           {(events ?? []).length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <ScrollText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p>ยังไม่มี Events</p>
+              <p>ยังไม่มี Events — บันทึก Event แรกด้วยฟอร์มด้านบน</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -106,11 +111,14 @@ export default async function EventLogPage() {
                   <div key={event.id} className={`flex items-start gap-3 p-3 rounded-lg ${config.bg}`}>
                     <config.icon className={`w-4 h-4 mt-0.5 shrink-0 ${config.color}`} />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <span className="text-sm font-medium text-gray-900">{event.title}</span>
                         <Badge variant={config.badge} className="text-xs">{config.label}</Badge>
-                        <Badge variant="outline" className="text-xs capitalize">
+                        <Badge variant="outline" className="text-xs">
                           {event.mode === 'drill' ? 'ฝึกซ้อม' : 'ปฏิบัติการ'}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs capitalize text-gray-500">
+                          {event.event_type}
                         </Badge>
                       </div>
                       {event.description && (

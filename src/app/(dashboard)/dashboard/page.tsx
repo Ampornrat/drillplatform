@@ -16,7 +16,7 @@ async function getDashboardStats(userId: string) {
   const supabase = await createClient()
 
   const [drillsRes, eventsRes, standardsRes] = await Promise.all([
-    supabase.from('drills').select('id, status, mode').order('created_at', { ascending: false }).limit(5),
+    supabase.from('drills').select('id, title, status, mode').order('created_at', { ascending: false }).limit(5),
     supabase.from('event_log').select('id, severity, title, timestamp').order('timestamp', { ascending: false }).limit(5),
     supabase.from('standards_registry').select('id').eq('is_active', true),
   ])
@@ -133,9 +133,9 @@ export default async function DashboardPage() {
               <p className="text-sm text-gray-400 text-center py-6">ยังไม่มี Drill</p>
             ) : (
               <div className="space-y-3">
-                {recentDrills.map((drill: { id: string; status: string; mode: string }) => (
+                {recentDrills.map((drill: { id: string; title: string; status: string; mode: string }) => (
                   <div key={drill.id} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 truncate">{drill.id.slice(0, 8)}...</span>
+                    <span className="text-sm text-gray-600 truncate">{drill.title}</span>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="text-xs capitalize">
                         {drill.mode === 'drill' ? 'ฝึกซ้อม' : 'ปฏิบัติการ'}

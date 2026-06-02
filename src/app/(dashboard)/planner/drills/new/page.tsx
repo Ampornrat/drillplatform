@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createDrillAction } from '@/lib/supabase/actions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +13,6 @@ import { Radio, ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function NewDrillPage() {
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     title: '',
@@ -38,28 +36,22 @@ export default function NewDrillPage() {
       return
     }
     setLoading(true)
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const { error } = await supabase.from('drills').insert({
-        title: form.title,
-        description: form.description || null,
-        mode: form.mode,
-        status: 'draft',
-        location: form.location || null,
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
-        max_participants: form.max_participants ? parseInt(form.max_participants) : null,
-        objectives: form.objectives ? form.objectives.split('\n').filter(Boolean) : null,
-        created_by: user?.id,
-      })
-      if (error) {
-        toast.error('สร้าง Drill ไม่สำเร็จ', { description: error.message })
-      } else {
-        toast.success('สร้าง Drill สำเร็จ')
-        router.push('/planner/drills')
-      }
-    } finally {
+
+    const fd = new FormData()
+    fd.append('title', form.title)
+    fd.append('description', form.description)
+    fd.append('mode', form.mode)
+    fd.append('location', form.location)
+    if (form.start_date) fd.append('start_date', form.start_date)
+    if (form.end_date) fd.append('end_date', form.end_date)
+    if (form.max_participants) fd.append('max_participants', form.max_participants)
+    fd.append('objectives', form.objectives)
+
+    const result = await createDrillAction(fd)
+    // result is only set when server action returns an error
+    // on success, server action calls redirect() which navigates automatically
+    if (result?.error) {
+      toast.error('สร้าง Drill ไม่สำเร็จ', { description: result.error })
       setLoading(false)
     }
   }
@@ -87,13 +79,18 @@ export default function NewDrillPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="title">ชื่อ Drill *</Label>
-                <Input id="title" placeholder="เช่น การฝึกซ้อมรับมือเหตุฉุกเฉิน ครั้งที่ 1/2026"
-                  value={form.title} onChange={e => handleChange('title', e.target.value)} required />
+                <Input
+                  id="title"
+                  placeholder="เช่น การฝึกซ้อมรับมือเหตุฉุกเฉิน ครั้งที่ 1/2026"
+                  value={form.title}
+                  onChange={e => handleChange('title', e.target.value)}
+                  required
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="mode">โหมด *</Label>
-                <Select value={form.mode} onValueChange={v => handleChange('mode', v)}>
+                <Select value={form.mode} onValueChange={v => v && handleChange('mode', v)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -106,39 +103,67 @@ export default function NewDrillPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="location">สถานที่</Label>
-                <Input id="location" placeholder="เช่น ห้องประชุมหลัก, สนามฝึก A"
-                  value={form.location} onChange={e => handleChange('location', e.target.value)} />
+                <Input
+                  id="location"
+                  placeholder="เช่น ห้องประชุมหลัก, สนามฝึก A"
+                  value={form.location}
+                  onChange={e => handleChange('location', e.target.value)}
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="start_date">วันเริ่มต้น</Label>
-                <Input id="start_date" type="datetime-local"
-                  value={form.start_date} onChange={e => handleChange('start_date', e.target.value)} />
+                <Input
+                  id="start_date"
+                  type="datetime-local"
+                  value={form.start_date}
+                  onChange={e => handleChange('start_date', e.target.value)}
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="end_date">วันสิ้นสุด</Label>
-                <Input id="end_date" type="datetime-local"
-                  value={form.end_date} onChange={e => handleChange('end_date', e.target.value)} />
+                <Input
+                  id="end_date"
+                  type="datetime-local"
+                  value={form.end_date}
+                  onChange={e => handleChange('end_date', e.target.value)}
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="max_participants">จำนวนผู้เข้าร่วมสูงสุด</Label>
-                <Input id="max_participants" type="number" min="1" placeholder="เช่น 50"
-                  value={form.max_participants} onChange={e => handleChange('max_participants', e.target.value)} />
+                <Input
+                  id="max_participants"
+                  type="number"
+                  min="1"
+                  placeholder="เช่น 50"
+                  value={form.max_participants}
+                  onChange={e => handleChange('max_participants', e.target.value)}
+                />
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="description">คำอธิบาย</Label>
-              <Textarea id="description" placeholder="รายละเอียดของ Drill นี้..."
-                rows={3} value={form.description} onChange={e => handleChange('description', e.target.value)} />
+              <Textarea
+                id="description"
+                placeholder="รายละเอียดของ Drill นี้..."
+                rows={3}
+                value={form.description}
+                onChange={e => handleChange('description', e.target.value)}
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="objectives">วัตถุประสงค์ (หนึ่งข้อต่อบรรทัด)</Label>
-              <Textarea id="objectives" placeholder={'ฝึกการสื่อสารในภาวะวิกฤต\nทดสอบแผนการอพยพ\nประเมินความพร้อมของทีม'}
-                rows={4} value={form.objectives} onChange={e => handleChange('objectives', e.target.value)} />
+              <Textarea
+                id="objectives"
+                placeholder={'ฝึกการสื่อสารในภาวะวิกฤต\nทดสอบแผนการอพยพ\nประเมินความพร้อมของทีม'}
+                rows={4}
+                value={form.objectives}
+                onChange={e => handleChange('objectives', e.target.value)}
+              />
             </div>
 
             <div className="flex gap-3 pt-2">

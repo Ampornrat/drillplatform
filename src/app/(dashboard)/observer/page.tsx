@@ -2,17 +2,22 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Zap, Eye, Activity, AlertCircle } from 'lucide-react'
+import { Zap, Eye, Activity } from 'lucide-react'
 import Link from 'next/link'
+import { LogEventForm } from '../core/event-log/log-event-form'
+import { RealtimeEvents } from './realtime-events'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'สังเกตการณ์' }
 
 export default async function ObserverPage() {
   const supabase = await createClient()
-  const [{ data: activeDrills }, { data: recentEvents }] = await Promise.all([
+  const [{ data: activeDrills }, { data: recentEvents }, { data: allDrills }] = await Promise.all([
     supabase.from('drills').select('*').eq('status', 'active').order('start_date'),
-    supabase.from('event_log').select('*').order('timestamp', { ascending: false }).limit(10),
+    supabase.from('event_log').select('id, severity, title, timestamp')
+      .order('timestamp', { ascending: false }).limit(20),
+    supabase.from('drills').select('id, title, mode, status')
+      .in('status', ['planned', 'active', 'paused']).order('created_at', { ascending: false }),
   ])
 
   return (
@@ -58,7 +63,10 @@ export default async function ObserverPage() {
                       Live
                     </span>
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/core/event-log?drill=${drill.id}`}>สังเกตการณ์</Link>
+                      <Link href={`/operation/${drill.id}/cop`}>เปิด COP</Link>
+                    </Button>
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link href={`/core/event-log?drill=${drill.id}`}>Event Log</Link>
                     </Button>
                   </div>
                 </div>
@@ -69,53 +77,25 @@ export default async function ObserverPage() {
       </Card>
 
       {/* Quick Log Event */}
-      <Card className="border-blue-200">
+      <LogEventForm
+        drills={allDrills ?? []}
+        defaultDrillId={activeDrills?.[0]?.id}
+      />
+
+      {/* Recent Events — realtime */}
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Activity className="w-4 h-4 text-blue-600" />
-            บันทึก Event ด่วน
+            Events ล่าสุด
+            <span className="text-xs text-green-600 font-normal flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              อัปเดตอัตโนมัติ
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-500 mb-3">บันทึกเหตุการณ์ที่สังเกตเห็นระหว่าง Drill</p>
-          <Button asChild>
-            <Link href="/core/event-log">
-              <Activity className="w-4 h-4 mr-2" />
-              ไปที่ Event Log
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Recent Events */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Events ล่าสุด</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {(recentEvents ?? []).length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">ยังไม่มี Events</p>
-          ) : (
-            <div className="space-y-2">
-              {(recentEvents ?? []).map((event: {
-                id: string
-                severity: string
-                title: string
-                timestamp: string
-              }) => (
-                <div key={event.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
-                  <AlertCircle className={`w-4 h-4 shrink-0 ${
-                    event.severity === 'critical' ? 'text-red-500' :
-                    event.severity === 'warning' ? 'text-yellow-500' : 'text-blue-500'
-                  }`} />
-                  <span className="text-sm text-gray-700 flex-1 truncate">{event.title}</span>
-                  <span className="text-xs text-gray-400 shrink-0">
-                    {new Date(event.timestamp).toLocaleTimeString('th-TH')}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <RealtimeEvents initialEvents={recentEvents ?? []} />
         </CardContent>
       </Card>
     </div>

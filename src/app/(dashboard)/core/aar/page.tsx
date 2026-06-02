@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { FileBarChart2, Plus, Star, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react'
+import { FileBarChart2, Star, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { th } from 'date-fns/locale'
+import { CreateAARDialog } from './create-aar-dialog'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'AAR / LMS' }
@@ -18,13 +18,21 @@ const statusConfig = {
 
 export default async function AARPage() {
   const supabase = await createClient()
-  const { data: reports } = await supabase
-    .from('aar_reports')
-    .select('*, drills(title, mode)')
-    .order('created_at', { ascending: false })
 
-  const avgRating = (reports ?? []).reduce((sum: number, r: { rating: number | null }) => sum + (r.rating ?? 0), 0) /
-    Math.max((reports ?? []).filter((r: { rating: number | null }) => r.rating).length, 1)
+  const [{ data: reports }, { data: drills }] = await Promise.all([
+    supabase
+      .from('aar_reports')
+      .select('*, drills(title, mode)')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('drills')
+      .select('id, title, mode, status')
+      .order('created_at', { ascending: false }),
+  ])
+
+  const reportList = reports ?? []
+  const avgRating = reportList.reduce((sum: number, r: { rating: number | null }) => sum + (r.rating ?? 0), 0) /
+    Math.max(reportList.filter((r: { rating: number | null }) => r.rating).length, 1)
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -36,10 +44,7 @@ export default async function AARPage() {
           </h1>
           <p className="text-gray-500 text-sm mt-1">After Action Review และ Learning Management System</p>
         </div>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />
-          สร้าง AAR Report
-        </Button>
+        <CreateAARDialog drills={drills ?? []} />
       </div>
 
       {/* Summary Cards */}
@@ -51,7 +56,7 @@ export default async function AARPage() {
             </div>
             <div>
               <p className="text-xs text-gray-500">รายงานทั้งหมด</p>
-              <p className="text-xl font-bold">{(reports ?? []).length}</p>
+              <p className="text-xl font-bold">{reportList.length}</p>
             </div>
           </CardContent>
         </Card>
@@ -62,7 +67,12 @@ export default async function AARPage() {
             </div>
             <div>
               <p className="text-xs text-gray-500">คะแนนเฉลี่ย</p>
-              <p className="text-xl font-bold">{avgRating.toFixed(1)}<span className="text-sm text-gray-400">/5</span></p>
+              <p className="text-xl font-bold">
+                {reportList.filter((r: { rating: number | null }) => r.rating).length > 0
+                  ? avgRating.toFixed(1)
+                  : '—'}
+                <span className="text-sm text-gray-400">/5</span>
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -74,7 +84,7 @@ export default async function AARPage() {
             <div>
               <p className="text-xs text-gray-500">เผยแพร่แล้ว</p>
               <p className="text-xl font-bold">
-                {(reports ?? []).filter((r: { status: string }) => r.status === 'published').length}
+                {reportList.filter((r: { status: string }) => r.status === 'published').length}
               </p>
             </div>
           </CardContent>
@@ -82,16 +92,17 @@ export default async function AARPage() {
       </div>
 
       {/* Reports List */}
-      {(reports ?? []).length === 0 ? (
+      {reportList.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-gray-400">
             <FileBarChart2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p>ยังไม่มี AAR Reports</p>
+            <p className="text-sm mt-1">กดปุ่ม &quot;สร้าง AAR Report&quot; ด้านบนเพื่อเริ่มต้น</p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          {(reports ?? []).map((report: {
+          {reportList.map((report: {
             id: string
             title: string
             summary: string | null
@@ -110,7 +121,7 @@ export default async function AARPage() {
                 <CardContent className="py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h3 className="font-semibold text-gray-900">{report.title}</h3>
                         <Badge variant={statusCfg.color} className="text-xs">{statusCfg.label}</Badge>
                       </div>
