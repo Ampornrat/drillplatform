@@ -16,7 +16,7 @@ const navItems = [
   { href: 'cop', label: 'ภาพรวมสั่งการ', icon: LayoutDashboard },
   { href: 'map', label: 'แผนที่ COP', icon: Map },
   { href: 'iap', label: 'แผน IAP', icon: ClipboardList, badge: 'v2.1' },
-  { href: 'hospital', label: 'โรงพยาบาล', icon: Building2, badge: '2' },
+  { href: 'facility', label: 'Facility & Transport', icon: Building2 },
   { href: 'registry', label: 'ทะเบียนกลาง', icon: Database },
   { href: 'aar', label: 'AAR', icon: BookOpen },
 ]

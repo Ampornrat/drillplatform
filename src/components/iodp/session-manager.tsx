@@ -62,7 +62,7 @@ export function SessionManager({ fireEvent }: { fireEvent: (e: any) => void }) {
       .from('iodp_sessions')
       .select('*')
       .order('created_at', { ascending: false });
-    setSessions(data ?? []);
+    setSessions((data ?? []) as unknown as IodpSession[]);
     setLoading(false);
   }, []);
 
@@ -72,8 +72,8 @@ export function SessionManager({ fireEvent }: { fireEvent: (e: any) => void }) {
       supabase.from('iodp_sites').select('*').eq('session_id', sess.id).order('site_code'),
       supabase.from('iodp_teams').select('*').eq('session_id', sess.id).order('team_code'),
     ]);
-    setSites(s.data ?? []);
-    setTeams(t.data ?? []);
+    setSites((s.data ?? []) as unknown as IodpSite[]);
+    setTeams((t.data ?? []) as unknown as IodpTeam[]);
   }, []);
 
   useEffect(() => { loadSessions(); }, []);
