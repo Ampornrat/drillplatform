@@ -1,5 +1,16 @@
-export type UserRole = 'admin' | 'commander' | 'observer' | 'participant' | 'guest'
+export type UserRole =
+  | 'admin'
+  | 'commander'
+  | 'medical'
+  | 'logistics'
+  | 'controller'
+  | 'evaluator'
+  | 'observer'
+  | 'participant'
+  | 'guest'
+
 export type SystemMode = 'operation' | 'drill'
+export type AppMode = 'operation' | 'drill' | 'field' | 'admin'
 export type DrillStatus = 'draft' | 'planned' | 'active' | 'paused' | 'completed' | 'cancelled'
 export type EventSeverity = 'info' | 'warning' | 'critical'
 export type DocumentCategory = 'manual' | 'sop' | 'guide' | 'form' | 'report' | 'other'
@@ -149,4 +160,19 @@ export interface Announcement {
   expires_at: string | null
   created_by: string | null
   created_at: string
+}
+
+/** Serialisable app context passed to client providers and components. */
+export interface AppCtx {
+  userId: string
+  role: UserRole
+  userName: string | null
+  organizationId: string | null
+  canManage: boolean
+  isAdmin: boolean
+  activeIncidentId: string | null
+  activeScenarioId: string | null
+  activeIncidentTitle: string | null
+  activeIncidentMode: SystemMode | null
+  activeScenarioCode: string | null
 }

@@ -1,16 +1,19 @@
-import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { ClipboardList, CheckCircle, XCircle } from 'lucide-react'
+import { getAuthorityMatrix } from '@/services/registry.service'
 import type { Metadata } from 'next'
 import type { UserRole } from '@/types'
 
 export const metadata: Metadata = { title: 'Authority Matrix' }
 
-const roles: UserRole[] = ['admin', 'commander', 'observer', 'participant', 'guest']
+const roles: UserRole[] = ['admin', 'commander', 'medical', 'logistics', 'controller', 'evaluator', 'observer', 'participant', 'guest']
 const roleLabels: Record<UserRole, string> = {
   admin: 'Admin',
   commander: 'Commander',
+  medical: 'Medical',
+  logistics: 'Logistics',
+  controller: 'Controller',
+  evaluator: 'Evaluator',
   observer: 'Observer',
   participant: 'Participant',
   guest: 'Guest',
@@ -18,26 +21,20 @@ const roleLabels: Record<UserRole, string> = {
 const roleColors: Record<UserRole, string> = {
   admin: 'bg-red-100 text-red-700',
   commander: 'bg-blue-100 text-blue-700',
-  observer: 'bg-green-100 text-green-700',
+  medical: 'bg-green-100 text-green-700',
+  logistics: 'bg-orange-100 text-orange-700',
+  controller: 'bg-indigo-100 text-indigo-700',
+  evaluator: 'bg-teal-100 text-teal-700',
+  observer: 'bg-gray-100 text-gray-700',
   participant: 'bg-gray-100 text-gray-700',
   guest: 'bg-gray-50 text-gray-500',
 }
 
 export default async function AuthorityMatrixPage() {
-  const supabase = await createClient()
-  const { data: matrix } = await supabase
-    .from('authority_matrix')
-    .select('*')
-    .order('resource')
-    .order('action')
+  const result = await getAuthorityMatrix()
+  const matrix = result.ok ? result.data : []
 
-  // Group by resource+action
-  const grouped = (matrix ?? []).reduce<Record<string, Record<string, boolean>>>((acc, row: {
-    resource: string
-    action: string
-    role: string
-    allowed: boolean
-  }) => {
+  const grouped = matrix.reduce<Record<string, Record<string, boolean>>>((acc, row) => {
     const key = `${row.resource}::${row.action}`
     if (!acc[key]) acc[key] = {}
     acc[key][row.role] = row.allowed

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { OperationSidebar } from '@/components/operation/operation-sidebar'
+import { resolveFullContext, assertCanAccessIncident } from '@/services/context.service'
 
 export default async function OperationLayout({
   children,
@@ -9,23 +9,20 @@ export default async function OperationLayout({
   children: React.ReactNode
   params: Promise<{ id: string }>
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name, role')
-    .eq('id', user.id)
-    .single()
+  const ctxResult = await resolveFullContext()
+  if (!ctxResult.ok) redirect('/login')
+  const ctx = ctxResult.data
 
   const { id } = await params
+
+  const accessResult = await assertCanAccessIncident(ctx, id)
+  if (!accessResult.ok) redirect('/forbidden')
+
   const roleLabel: Record<string, string> = {
-    admin: 'ผู้ดูแลระบบ',
-    commander: 'ผู้บัญชาการ',
-    observer: 'ผู้สังเกตการณ์',
-    participant: 'ผู้เข้าร่วม',
-    guest: 'ผู้เยี่ยมชม',
+    admin: 'ผู้ดูแลระบบ', commander: 'ผู้บัญชาการ',
+    medical: 'ทีมการแพทย์', logistics: 'โลจิสติกส์',
+    controller: 'Controller', evaluator: 'ผู้ประเมิน',
+    observer: 'ผู้สังเกตการณ์', participant: 'ผู้เข้าร่วม', guest: 'ผู้เยี่ยมชม',
   }
 
   return (
@@ -33,8 +30,8 @@ export default async function OperationLayout({
       <OperationSidebar
         incidentId={id}
         mode="operation"
-        userName={profile?.full_name ?? user.email ?? null}
-        userRole={roleLabel[profile?.role ?? 'participant']}
+        userName={ctx.profile.full_name ?? null}
+        userRole={roleLabel[ctx.role] ?? ctx.role}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         {children}

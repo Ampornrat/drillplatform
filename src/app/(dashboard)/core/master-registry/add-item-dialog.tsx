@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useTransition } from 'react'
+import { addRegistryItemAction } from '@/lib/supabase/actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,7 +10,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -26,32 +24,30 @@ import { Plus, Loader2 } from 'lucide-react'
 type Org = { id: string; name: string }
 
 export function AddItemDialog({ organizations }: { organizations: Org[] }) {
-  const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [isPending, startTransition] = useTransition()
   const [type, setType] = useState<string>('')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [orgId, setOrgId] = useState<string>('none')
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!type || !name || !code) {
       toast.error('กรุณากรอกข้อมูลให้ครบถ้วน')
       return
     }
-    setLoading(true)
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.from('master_registry').insert({
-        type,
-        name,
-        code: code.toUpperCase(),
-        organization_id: orgId === 'none' ? null : orgId,
-        data: {},
-      })
-      if (error) {
-        toast.error('เพิ่มรายการไม่สำเร็จ', { description: error.message })
+
+    const fd = new FormData()
+    fd.append('type', type)
+    fd.append('name', name)
+    fd.append('code', code)
+    fd.append('organization_id', orgId)
+
+    startTransition(async () => {
+      const result = await addRegistryItemAction(fd)
+      if (result?.error) {
+        toast.error('เพิ่มรายการไม่สำเร็จ', { description: result.error })
       } else {
         toast.success('เพิ่มรายการสำเร็จ')
         setOpen(false)
@@ -59,21 +55,17 @@ export function AddItemDialog({ organizations }: { organizations: Org[] }) {
         setName('')
         setCode('')
         setOrgId('none')
-        router.refresh()
       }
-    } finally {
-      setLoading(false)
-    }
+    })
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />
-          เพิ่มรายการ
-        </Button>
-      </DialogTrigger>
+    <>
+      <Button onClick={() => setOpen(true)}>
+        <Plus className="w-4 h-4 mr-2" />
+        เพิ่มรายการ
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>เพิ่มรายการใหม่</DialogTitle>
@@ -81,7 +73,7 @@ export function AddItemDialog({ organizations }: { organizations: Org[] }) {
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="space-y-2">
             <Label>ประเภท</Label>
-            <Select value={type} onValueChange={setType} required>
+            <Select value={type} onValueChange={v => v && setType(v)} required>
               <SelectTrigger>
                 <SelectValue placeholder="เลือกประเภท" />
               </SelectTrigger>
@@ -115,7 +107,7 @@ export function AddItemDialog({ organizations }: { organizations: Org[] }) {
           {organizations.length > 0 && (
             <div className="space-y-2">
               <Label>องค์กร (ถ้ามี)</Label>
-              <Select value={orgId} onValueChange={setOrgId}>
+              <Select value={orgId} onValueChange={v => setOrgId(v ?? 'none')}>
                 <SelectTrigger>
                   <SelectValue placeholder="เลือกองค์กร" />
                 </SelectTrigger>
@@ -134,13 +126,14 @@ export function AddItemDialog({ organizations }: { organizations: Org[] }) {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               ยกเลิก
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               เพิ่มรายการ
             </Button>
           </div>
         </form>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </>
   )
 }

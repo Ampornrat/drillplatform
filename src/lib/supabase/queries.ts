@@ -83,7 +83,7 @@ export async function getDrillCOPData(drillId: string) {
       .eq('id', drillId)
       .single(),
     supabase.from('event_log')
-      .select('id, severity, title, timestamp')
+      .select('id, severity, title, timestamp, event_type')
       .eq('drill_id', drillId)
       .order('timestamp', { ascending: false })
       .limit(10),

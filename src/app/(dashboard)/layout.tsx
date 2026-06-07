@@ -1,31 +1,41 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/sidebar'
-import type { UserRole } from '@/types'
+import { ActiveContextBar } from '@/components/layout/active-context-bar'
+import { AppContextProvider } from '@/components/providers/app-context-provider'
+import { resolveFullContext, toAppCtx } from '@/services/context.service'
+import { getDrillsList } from '@/services/drill.service'
+import { getScenarios } from '@/services/scenario.service'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const ctxResult = await resolveFullContext()
+  if (!ctxResult.ok) redirect('/login')
 
-  if (!user) redirect('/login')
+  const ctx = ctxResult.data
+  const appCtx = toAppCtx(ctx)
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name, role')
-    .eq('id', user.id)
-    .single()
+  const [incidentsResult, scenariosResult] = await Promise.all([
+    getDrillsList({ limit: 30, status: ['draft', 'planned', 'active', 'paused'] }),
+    getScenarios(),
+  ])
 
-  const userRole = (profile?.role ?? 'participant') as UserRole
-  const userName = profile?.full_name ?? user.email ?? null
+  const availableIncidents = incidentsResult.ok ? incidentsResult.data : []
+  const availableScenarios = scenariosResult.ok ? scenariosResult.data : []
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      <Sidebar userRole={userRole} userName={userName} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+    <AppContextProvider ctx={appCtx}>
+      <div className="flex h-screen bg-gray-50 overflow-hidden">
+        <Sidebar ctx={appCtx} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <ActiveContextBar
+            ctx={appCtx}
+            availableIncidents={availableIncidents}
+            availableScenarios={availableScenarios}
+          />
+          <main className="flex-1 overflow-y-auto">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </AppContextProvider>
   )
 }

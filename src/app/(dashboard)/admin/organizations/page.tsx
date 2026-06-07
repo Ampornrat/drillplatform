@@ -1,18 +1,15 @@
-import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Building2, Plus, Mail } from 'lucide-react'
+import { getOrganizationList } from '@/services/registry.service'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'จัดการองค์กร' }
 
 export default async function OrganizationsPage() {
-  const supabase = await createClient()
-  const { data: orgs } = await supabase
-    .from('organizations')
-    .select('*')
-    .order('name')
+  const result = await getOrganizationList()
+  const orgs = result.ok ? result.data : []
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -30,7 +27,7 @@ export default async function OrganizationsPage() {
         </Button>
       </div>
 
-      {(orgs ?? []).length === 0 ? (
+      {orgs.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-gray-400">
             <Building2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -39,14 +36,7 @@ export default async function OrganizationsPage() {
         </Card>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(orgs ?? []).map((org: {
-            id: string
-            name: string
-            code: string
-            description: string | null
-            contact_email: string | null
-            is_active: boolean
-          }) => (
+          {orgs.map(org => (
             <Card key={org.id} className="hover:shadow-md transition-shadow">
               <CardContent className="py-5">
                 <div className="flex items-start gap-3">

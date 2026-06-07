@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BookOpen, Calendar } from 'lucide-react'
 import { AddStandardDialog } from '@/components/standards/add-standard-dialog'
 import { format } from 'date-fns'
 import { th } from 'date-fns/locale'
+import { getStandards } from '@/services/registry.service'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Standards Registry' }
@@ -19,13 +19,8 @@ const categoryLabels: Record<string, string> = {
 }
 
 export default async function StandardsPage() {
-  const supabase = await createClient()
-  const { data: standards } = await supabase
-    .from('standards_registry')
-    .select('*')
-    .eq('is_active', true)
-    .order('category')
-    .order('title')
+  const result = await getStandards(true)
+  const standards = result.ok ? result.data : []
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -40,7 +35,7 @@ export default async function StandardsPage() {
         <AddStandardDialog />
       </div>
 
-      {(standards ?? []).length === 0 ? (
+      {standards.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-gray-400">
             <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -49,15 +44,7 @@ export default async function StandardsPage() {
         </Card>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(standards ?? []).map((std: {
-            id: string
-            code: string
-            title: string
-            category: string
-            version: string
-            content: string | null
-            effective_date: string | null
-          }) => (
+          {standards.map(std => (
             <Card key={std.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">

@@ -1,35 +1,38 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { ClipboardList, Calendar, BookOpen, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { th } from 'date-fns/locale'
+import { resolveUserContext } from '@/services/context.service'
+import { createClient } from '@/lib/supabase/server'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'ภารกิจของฉัน' }
 
 export default async function ParticipantPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctxResult = await resolveUserContext()
+  if (!ctxResult.ok) redirect('/login')
+  const ctx = ctxResult.data
 
+  const supabase = await createClient()
   const { data: myDrills } = await supabase
     .from('drill_participants')
-    .select('*, drills(title, mode, status, start_date, end_date, location)')
-    .eq('user_id', user.id)
+    .select('id, status, role_in_drill, drills(id, title, mode, status, start_date, end_date, location)')
+    .eq('user_id', ctx.userId)
     .order('created_at', { ascending: false })
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', user.id)
-    .single()
+  type MyDrillRow = {
+    id: string
+    status: string
+    role_in_drill: string | null
+    drills: { id: string; title: string; mode: string; status: string; start_date: string | null; end_date: string | null; location: string | null } | null
+  }
+  const rows = (myDrills ?? []) as MyDrillRow[]
 
-  const activeDrills = (myDrills ?? []).filter((m: { drills?: { status: string } | null }) => m.drills?.status === 'active')
-  const upcomingDrills = (myDrills ?? []).filter((m: { drills?: { status: string } | null }) => m.drills?.status === 'planned')
+  const activeDrills = rows.filter(m => m.drills?.status === 'active')
+  const upcomingDrills = rows.filter(m => m.drills?.status === 'planned')
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -38,9 +41,7 @@ export default async function ParticipantPage() {
           <ClipboardList className="w-6 h-6 text-blue-600" />
           ภารกิจของฉัน
         </h1>
-        <p className="text-gray-500 text-sm mt-1">
-          สวัสดี {profile?.full_name ?? 'ผู้ใช้งาน'} — รายการ Drills ที่คุณเข้าร่วม
-        </p>
+        <p className="text-gray-500 text-sm mt-1">รายการ Drills ที่คุณเข้าร่วม</p>
       </div>
 
       {/* Summary */}
@@ -59,7 +60,7 @@ export default async function ParticipantPage() {
         </Card>
         <Card>
           <CardContent className="py-4 text-center">
-            <p className="text-2xl font-bold text-gray-600">{(myDrills ?? []).length}</p>
+            <p className="text-2xl font-bold text-gray-600">{rows.length}</p>
             <p className="text-xs text-gray-500 mt-1">ทั้งหมด</p>
           </CardContent>
         </Card>
@@ -76,11 +77,7 @@ export default async function ParticipantPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {activeDrills.map((m: {
-                id: string
-                status: string
-                drills?: { title: string; mode: string; status: string; start_date: string | null; location: string | null } | null
-              }) => m.drills && (
+              {activeDrills.map(m => m.drills && (
                 <div key={m.id} className="p-3 bg-green-50 rounded-lg border border-green-200">
                   <div className="flex items-center justify-between">
                     <div>
@@ -109,7 +106,7 @@ export default async function ParticipantPage() {
           <CardTitle className="text-base">Drills ทั้งหมดของฉัน</CardTitle>
         </CardHeader>
         <CardContent>
-          {(myDrills ?? []).length === 0 ? (
+          {rows.length === 0 ? (
             <div className="text-center py-10 text-gray-400">
               <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p>คุณยังไม่ได้เข้าร่วม Drill ใดๆ</p>
@@ -117,19 +114,7 @@ export default async function ParticipantPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {(myDrills ?? []).map((m: {
-                id: string
-                status: string
-                role_in_drill: string | null
-                drills?: {
-                  title: string
-                  mode: string
-                  status: string
-                  start_date: string | null
-                  end_date: string | null
-                  location: string | null
-                } | null
-              }) => m.drills && (
+              {rows.map(m => m.drills && (
                 <div key={m.id} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-gray-50">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">

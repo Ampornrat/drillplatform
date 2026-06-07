@@ -1,8 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Users, Package, Building2 } from 'lucide-react'
 import { AddItemDialog } from './add-item-dialog'
+import { getObjectPassports, getOrganizationList } from '@/services/registry.service'
+import type { ObjectPassport } from '@/contracts/registry.contract'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Master Registry' }
@@ -14,23 +15,14 @@ const typeConfig = {
 }
 
 export default async function MasterRegistryPage() {
-  const supabase = await createClient()
-  const [{ data: items }, { data: organizations }] = await Promise.all([
-    supabase
-      .from('master_registry')
-      .select('*, organizations(name)')
-      .eq('is_active', true)
-      .order('type')
-      .order('name'),
-    supabase
-      .from('organizations')
-      .select('id, name')
-      .eq('is_active', true)
-      .order('name'),
+  const [itemsResult, orgsResult] = await Promise.all([
+    getObjectPassports(),
+    getOrganizationList(),
   ])
+  const items: ObjectPassport[] = itemsResult.ok ? itemsResult.data : []
+  const organizations = orgsResult.ok ? orgsResult.data : []
 
-  const byType = (items ?? []).reduce<Record<string, typeof items>>((acc, item) => {
-    if (!item) return acc
+  const byType = items.reduce<Record<string, ObjectPassport[]>>((acc, item) => {
     if (!acc[item.type]) acc[item.type] = []
     acc[item.type]!.push(item)
     return acc
@@ -46,7 +38,7 @@ export default async function MasterRegistryPage() {
           </h1>
           <p className="text-gray-500 text-sm mt-1">ทะเบียนหลักของบุคลากร หน่วยงาน และยุทโธปกรณ์</p>
         </div>
-        <AddItemDialog organizations={organizations ?? []} />
+        <AddItemDialog organizations={organizations} />
       </div>
 
       {/* Summary */}
@@ -92,16 +84,11 @@ export default async function MasterRegistryPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {records.map((item: {
-                        id: string
-                        code: string
-                        name: string
-                        organizations?: { name: string } | null
-                      }) => (
+                      {records.map(item => (
                         <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-2 pr-4 font-mono text-xs text-gray-500">{item.code}</td>
                           <td className="py-2 pr-4 font-medium">{item.name}</td>
-                          <td className="py-2 text-gray-500">{item.organizations?.name ?? '-'}</td>
+                          <td className="py-2 text-gray-500">{item.organizationName ?? '-'}</td>
                         </tr>
                       ))}
                     </tbody>

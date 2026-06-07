@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Users, UserPlus, Shield } from 'lucide-react'
+import { Users, UserPlus } from 'lucide-react'
 import { format } from 'date-fns'
 import { th } from 'date-fns/locale'
+import { getUserList } from '@/services/registry.service'
 import type { Metadata } from 'next'
 import type { UserRole } from '@/types'
 
@@ -13,6 +13,10 @@ export const metadata: Metadata = { title: 'จัดการผู้ใช้
 const roleLabels: Record<UserRole, string> = {
   admin: 'ผู้ดูแลระบบ',
   commander: 'ผู้บังคับบัญชา',
+  medical: 'ทีมการแพทย์',
+  logistics: 'โลจิสติกส์',
+  controller: 'Controller',
+  evaluator: 'ผู้ประเมิน',
   observer: 'ผู้สังเกตการณ์',
   participant: 'ผู้เข้าร่วม',
   guest: 'ผู้เยี่ยมชม',
@@ -20,19 +24,20 @@ const roleLabels: Record<UserRole, string> = {
 const roleColors: Record<UserRole, string> = {
   admin: 'destructive',
   commander: 'default',
+  medical: 'secondary',
+  logistics: 'secondary',
+  controller: 'secondary',
+  evaluator: 'secondary',
   observer: 'secondary',
   participant: 'outline',
   guest: 'outline',
 }
 
 export default async function UsersPage() {
-  const supabase = await createClient()
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('*, organizations(name)')
-    .order('created_at', { ascending: false })
+  const result = await getUserList()
+  const profiles = result.ok ? result.data : []
 
-  const roleCounts = (profiles ?? []).reduce<Record<string, number>>((acc, p: { role: string }) => {
+  const roleCounts = profiles.reduce<Record<string, number>>((acc, p) => {
     acc[p.role] = (acc[p.role] ?? 0) + 1
     return acc
   }, {})
@@ -72,7 +77,7 @@ export default async function UsersPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">รายชื่อผู้ใช้ ({(profiles ?? []).length} คน)</CardTitle>
+          <CardTitle className="text-base">รายชื่อผู้ใช้ ({profiles.length} คน)</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -88,20 +93,12 @@ export default async function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {(profiles ?? []).length === 0 ? (
+                {profiles.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-gray-400">ยังไม่มีผู้ใช้</td>
                   </tr>
                 ) : (
-                  (profiles ?? []).map((p: {
-                    id: string
-                    full_name: string | null
-                    role: UserRole
-                    position: string | null
-                    is_active: boolean
-                    created_at: string
-                    organizations?: { name: string } | null
-                  }) => (
+                  profiles.map(p => (
                     <tr key={p.id} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
@@ -109,7 +106,6 @@ export default async function UsersPage() {
                             {p.full_name?.charAt(0) ?? '?'}
                           </div>
                           <span className="font-medium">{p.full_name ?? 'ไม่ระบุ'}</span>
-                          {!p.is_active && <Badge variant="outline" className="text-xs text-red-500">ปิดใช้งาน</Badge>}
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -120,7 +116,7 @@ export default async function UsersPage() {
                           {roleLabels[p.role]}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4 text-gray-500">{p.organizations?.name ?? '-'}</td>
+                      <td className="py-3 px-4 text-gray-500">{p.organizationName ?? '-'}</td>
                       <td className="py-3 px-4 text-gray-500">{p.position ?? '-'}</td>
                       <td className="py-3 px-4 text-gray-500">
                         {format(new Date(p.created_at), 'dd MMM yyyy', { locale: th })}

@@ -1,10 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollText, AlertTriangle, Info } from 'lucide-react'
 import { format } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { LogEventForm } from './log-event-form'
+import { getEvents } from '@/services/event.service'
+import { getDrillsList } from '@/services/drill.service'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Event Log' }
@@ -16,23 +17,15 @@ const severityConfig = {
 }
 
 export default async function EventLogPage() {
-  const supabase = await createClient()
-
-  const [{ data: events }, { data: drills }] = await Promise.all([
-    supabase
-      .from('event_log')
-      .select('*')
-      .order('timestamp', { ascending: false })
-      .limit(100),
-    supabase
-      .from('drills')
-      .select('id, title, mode, status')
-      .in('status', ['planned', 'active', 'paused'])
-      .order('created_at', { ascending: false }),
+  const [eventsResult, drillsResult] = await Promise.all([
+    getEvents({ limit: 100 }),
+    getDrillsList({ status: ['planned', 'active', 'paused'] }),
   ])
+  const events = eventsResult.ok ? eventsResult.data : []
+  const drills = drillsResult.ok ? drillsResult.data : []
 
-  const criticalCount = (events ?? []).filter((e: { severity: string }) => e.severity === 'critical').length
-  const warningCount = (events ?? []).filter((e: { severity: string }) => e.severity === 'warning').length
+  const criticalCount = events.filter(e => e.severity === 'critical').length
+  const warningCount = events.filter(e => e.severity === 'warning').length
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -45,7 +38,7 @@ export default async function EventLogPage() {
       </div>
 
       {/* Inline log form */}
-      <LogEventForm drills={drills ?? []} />
+      <LogEventForm drills={drills} />
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4">
@@ -56,7 +49,7 @@ export default async function EventLogPage() {
             </div>
             <div>
               <p className="text-xs text-gray-500">ทั้งหมด</p>
-              <p className="text-xl font-bold">{(events ?? []).length}</p>
+              <p className="text-xl font-bold">{events.length}</p>
             </div>
           </CardContent>
         </Card>
@@ -90,22 +83,14 @@ export default async function EventLogPage() {
           <CardTitle className="text-base">รายการ Events</CardTitle>
         </CardHeader>
         <CardContent>
-          {(events ?? []).length === 0 ? (
+          {events.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <ScrollText className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p>ยังไม่มี Events — บันทึก Event แรกด้วยฟอร์มด้านบน</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {(events ?? []).map((event: {
-                id: string
-                severity: string
-                title: string
-                description: string | null
-                event_type: string
-                mode: string
-                timestamp: string
-              }) => {
+              {events.map(event => {
                 const config = severityConfig[event.severity as keyof typeof severityConfig] ?? severityConfig.info
                 return (
                   <div key={event.id} className={`flex items-start gap-3 p-3 rounded-lg ${config.bg}`}>

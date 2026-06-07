@@ -232,3 +232,111 @@ export async function updateDrillStatusAction(drillId: string, newStatus: string
   revalidatePath(`/operation/${drillId}/cop`)
   return { success: true }
 }
+
+// ----------------------------------------------------------------
+// Upsert per-drill safety gate status (admin/commander only)
+// ----------------------------------------------------------------
+export async function upsertDrillSafetyGateAction(
+  drillId: string,
+  ruleId: string,
+  status: 'passed' | 'failed' | 'waived' | 'pending',
+  notes?: string
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  const { data: profile } = await supabase
+    .from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'commander'].includes(profile.role)) {
+    return { error: 'ไม่มีสิทธิ์อัปเดต Safety Gate' }
+  }
+
+  const { error } = await supabase.rpc('upsert_drill_safety_gate', {
+    p_drill_id: drillId,
+    p_rule_id: ruleId,
+    p_status: status,
+    p_notes: notes ?? null,
+  })
+  if (error) return { error: error.message }
+
+  await logPlatformEvent({
+    drillId,
+    eventType: 'safety_gate_updated',
+    title: `Safety Gate อัปเดตสถานะ: ${status}`,
+    severity: status === 'failed' ? 'warning' : 'info',
+  })
+
+  revalidatePath(`/planner/drills/${drillId}`)
+  revalidatePath(`/operation/${drillId}/cop`)
+  return { success: true }
+}
+
+// ----------------------------------------------------------------
+// Add Standard (standards_registry) + log
+// ----------------------------------------------------------------
+export async function addStandardAction(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  const title = (formData.get('title') as string)?.trim()
+  const code = (formData.get('code') as string)?.trim()
+  const category = (formData.get('category') as string)?.trim()
+  if (!title || !code || !category) return { error: 'กรุณากรอกข้อมูลที่จำเป็น' }
+
+  const { error } = await supabase.from('standards_registry').insert({
+    title,
+    code: code.toUpperCase(),
+    category,
+    version: (formData.get('version') as string) || '1.0',
+    content: (formData.get('content') as string) || null,
+    effective_date: (formData.get('effective_date') as string) || null,
+    is_active: true,
+  })
+  if (error) return { error: error.message }
+
+  await logPlatformEvent({
+    eventType: 'standard_added',
+    title: `เพิ่มมาตรฐาน: ${code.toUpperCase()} — ${title}`,
+    severity: 'info',
+  })
+
+  revalidatePath('/core/standards')
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+// ----------------------------------------------------------------
+// Add Master Registry item + log
+// ----------------------------------------------------------------
+export async function addRegistryItemAction(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  const type = (formData.get('type') as string)?.trim()
+  const name = (formData.get('name') as string)?.trim()
+  const code = (formData.get('code') as string)?.trim()
+  if (!type || !name || !code) return { error: 'กรุณากรอกข้อมูลให้ครบถ้วน' }
+
+  const orgId = (formData.get('organization_id') as string) || null
+
+  const { error } = await supabase.from('master_registry').insert({
+    type,
+    name,
+    code: code.toUpperCase(),
+    organization_id: orgId === 'none' || !orgId ? null : orgId,
+    data: {},
+  })
+  if (error) return { error: error.message }
+
+  await logPlatformEvent({
+    eventType: 'registry_item_added',
+    title: `เพิ่มรายการ Registry: ${code.toUpperCase()} — ${name}`,
+    severity: 'info',
+  })
+
+  revalidatePath('/core/master-registry')
+  return { success: true }
+}

@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useTransition } from 'react'
+import { addStandardAction } from '@/lib/supabase/actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,9 +13,8 @@ import { toast } from 'sonner'
 import { Plus, Loader2 } from 'lucide-react'
 
 export function AddStandardDialog() {
-  const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [isPending, startTransition] = useTransition()
   const [form, setForm] = useState({
     title: '',
     code: '',
@@ -30,38 +28,35 @@ export function AddStandardDialog() {
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function reset() {
+    setForm({ title: '', code: '', category: '', version: '1.0', content: '', effective_date: '' })
+  }
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.title || !form.code || !form.category) {
       toast.error('กรุณากรอกข้อมูลที่จำเป็น')
       return
     }
 
-    setLoading(true)
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.from('standards_registry').insert({
-        title: form.title,
-        code: form.code.toUpperCase(),
-        category: form.category,
-        version: form.version || '1.0',
-        content: form.content || null,
-        effective_date: form.effective_date || null,
-        is_active: true,
-      })
+    const fd = new FormData()
+    fd.append('title', form.title)
+    fd.append('code', form.code)
+    fd.append('category', form.category)
+    fd.append('version', form.version)
+    if (form.content) fd.append('content', form.content)
+    if (form.effective_date) fd.append('effective_date', form.effective_date)
 
-      if (error) {
-        console.error('Supabase insert error:', error)
-        toast.error('เพิ่มไม่สำเร็จ', { description: error.message ?? error.code })
+    startTransition(async () => {
+      const result = await addStandardAction(fd)
+      if (result?.error) {
+        toast.error('เพิ่มไม่สำเร็จ', { description: result.error })
       } else {
         toast.success('เพิ่มมาตรฐานสำเร็จ')
+        reset()
         setOpen(false)
-        setForm({ title: '', code: '', category: '', version: '1.0', content: '', effective_date: '' })
-        router.refresh()
       }
-    } finally {
-      setLoading(false)
-    }
+    })
   }
 
   return (
@@ -149,11 +144,11 @@ export function AddStandardDialog() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
               ยกเลิก
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               บันทึก
             </Button>
           </div>

@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -6,19 +5,21 @@ import { Zap, Eye, Activity } from 'lucide-react'
 import Link from 'next/link'
 import { LogEventForm } from '../core/event-log/log-event-form'
 import { RealtimeEvents } from './realtime-events'
+import { getDrillsList } from '@/services/drill.service'
+import { getEvents } from '@/services/event.service'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'สังเกตการณ์' }
 
 export default async function ObserverPage() {
-  const supabase = await createClient()
-  const [{ data: activeDrills }, { data: recentEvents }, { data: allDrills }] = await Promise.all([
-    supabase.from('drills').select('*').eq('status', 'active').order('start_date'),
-    supabase.from('event_log').select('id, severity, title, timestamp')
-      .order('timestamp', { ascending: false }).limit(20),
-    supabase.from('drills').select('id, title, mode, status')
-      .in('status', ['planned', 'active', 'paused']).order('created_at', { ascending: false }),
+  const [activeDrillsResult, recentEventsResult, allDrillsResult] = await Promise.all([
+    getDrillsList({ status: 'active' }),
+    getEvents({ limit: 20 }),
+    getDrillsList({ status: ['planned', 'active', 'paused'] }),
   ])
+  const activeDrills = activeDrillsResult.ok ? activeDrillsResult.data : []
+  const recentEvents = recentEventsResult.ok ? recentEventsResult.data : []
+  const allDrills = allDrillsResult.ok ? allDrillsResult.data : []
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -36,20 +37,15 @@ export default async function ObserverPage() {
           <CardTitle className="text-base flex items-center gap-2">
             <Eye className="w-4 h-4 text-green-600" />
             Drills ที่กำลังดำเนินการ
-            <Badge>{(activeDrills ?? []).length}</Badge>
+            <Badge>{activeDrills.length}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {(activeDrills ?? []).length === 0 ? (
+          {activeDrills.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-6">ไม่มี Drill ที่กำลังดำเนินการ</p>
           ) : (
             <div className="space-y-3">
-              {(activeDrills ?? []).map((drill: {
-                id: string
-                title: string
-                mode: string
-                start_date: string | null
-              }) => (
+              {activeDrills.map(drill => (
                 <div key={drill.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
                   <div>
                     <h3 className="font-medium text-gray-900">{drill.title}</h3>
@@ -78,8 +74,8 @@ export default async function ObserverPage() {
 
       {/* Quick Log Event */}
       <LogEventForm
-        drills={allDrills ?? []}
-        defaultDrillId={activeDrills?.[0]?.id}
+        drills={allDrills}
+        defaultDrillId={activeDrills[0]?.id}
       />
 
       {/* Recent Events — realtime */}
@@ -95,7 +91,7 @@ export default async function ObserverPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <RealtimeEvents initialEvents={recentEvents ?? []} />
+          <RealtimeEvents initialEvents={recentEvents} />
         </CardContent>
       </Card>
     </div>

@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -6,6 +5,8 @@ import { Radio, Plus, Calendar, MapPin, Users } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { th } from 'date-fns/locale'
+import { getDrillsList } from '@/services/drill.service'
+import type { DrillListItem } from '@/contracts/drill.contract'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'จัดการ Drills' }
@@ -25,11 +26,8 @@ const modeConfig = {
 }
 
 export default async function DrillsPage() {
-  const supabase = await createClient()
-  const { data: drills } = await supabase
-    .from('drills')
-    .select('*, organizations(name)')
-    .order('created_at', { ascending: false })
+  const result = await getDrillsList()
+  const drills: DrillListItem[] = result.ok ? result.data : []
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -52,7 +50,7 @@ export default async function DrillsPage() {
       {/* Status Summary */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
         {Object.entries(statusConfig).map(([status, cfg]) => {
-          const count = (drills ?? []).filter((d: { status: string }) => d.status === status).length
+          const count = drills.filter(d => d.status === status).length
           return (
             <Card key={status}>
               <CardContent className="py-3 text-center">
@@ -65,7 +63,7 @@ export default async function DrillsPage() {
       </div>
 
       {/* Drills List */}
-      {(drills ?? []).length === 0 ? (
+      {drills.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-gray-400">
             <Radio className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -77,18 +75,7 @@ export default async function DrillsPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {(drills ?? []).map((drill: {
-            id: string
-            title: string
-            description: string | null
-            mode: 'operation' | 'drill'
-            status: string
-            start_date: string | null
-            end_date: string | null
-            location: string | null
-            max_participants: number | null
-            organizations?: { name: string } | null
-          }) => {
+          {drills.map(drill => {
             const statusCfg = statusConfig[drill.status as keyof typeof statusConfig] ?? statusConfig.draft
             const modeCfg = modeConfig[drill.mode] ?? modeConfig.drill
             return (
@@ -119,17 +106,17 @@ export default async function DrillsPage() {
                             {drill.location}
                           </span>
                         )}
-                        {drill.max_participants && (
+                        {drill.maxParticipants && (
                           <span className="flex items-center gap-1">
                             <Users className="w-3 h-3" />
-                            สูงสุด {drill.max_participants} คน
+                            สูงสุด {drill.maxParticipants} คน
                           </span>
                         )}
-                        {drill.organizations && (
+                        {drill.organizationName && (
                           <span className="text-gray-300">|</span>
                         )}
-                        {drill.organizations && (
-                          <span>{drill.organizations.name}</span>
+                        {drill.organizationName && (
+                          <span>{drill.organizationName}</span>
                         )}
                       </div>
                     </div>

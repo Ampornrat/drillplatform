@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AlertTriangle, ShieldCheck, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { getSafetyGateRules } from '@/services/registry.service'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Safety Gate Rules' }
@@ -20,13 +20,8 @@ const conditionLabel: Record<string, string> = {
 }
 
 export default async function SafetyGatesPage() {
-  const supabase = await createClient()
-  const { data: rules } = await supabase
-    .from('safety_gate_rules')
-    .select('*')
-    .eq('is_active', true)
-    .order('priority', { ascending: false })
-    .order('name')
+  const result = await getSafetyGateRules(true)
+  const rules = result.ok ? result.data : []
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -44,7 +39,7 @@ export default async function SafetyGatesPage() {
         </Button>
       </div>
 
-      {(rules ?? []).length === 0 ? (
+      {rules.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-gray-400">
             <ShieldCheck className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -53,16 +48,8 @@ export default async function SafetyGatesPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {(rules ?? []).map((rule: {
-            id: string
-            name: string
-            description: string | null
-            condition_type: string
-            action: string
-            priority: number
-            applies_to_modes: string[]
-          }) => {
-            const actionCfg = actionConfig[rule.action as keyof typeof actionConfig] ?? actionConfig.notify
+          {rules.map(rule => {
+            const actionCfg = actionConfig[rule.action] ?? actionConfig.notify
             return (
               <Card key={rule.id} className={`border ${actionCfg.bg}`}>
                 <CardContent className="py-4">
@@ -78,7 +65,7 @@ export default async function SafetyGatesPage() {
                       )}
                       <div className="flex items-center gap-2 mt-2">
                         <span className="text-xs text-gray-400">ใช้กับโหมด:</span>
-                        {rule.applies_to_modes.map((m: string) => (
+                        {rule.applies_to_modes.map(m => (
                           <Badge key={m} variant="secondary" className="text-xs">
                             {m === 'drill' ? 'ฝึกซ้อม' : 'ปฏิบัติการ'}
                           </Badge>

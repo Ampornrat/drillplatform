@@ -8,6 +8,7 @@ import { OPDashboard, MethaneIntake, CopDispatch, FacilityCoord } from './op-vie
 import { ControlRoom, EvaluationDashboard, AARLoop, Registry } from './drill-views';
 import { FieldMobile } from './field-view';
 import { SessionManager } from './session-manager';
+import { IAPWorkspace } from './iap-workspace';
 
 type Data = typeof DEMO_DATA;
 
@@ -163,11 +164,11 @@ export function IodpApp() {
       <div className="main">
         <TopBar mode={mode} data={data} role={role} roleInfo={roleInfo} view={view} />
         <ToastStack toasts={toasts} />
-        {view === 'dashboard' && mode === 'op' && <OPDashboard data={data} setView={setView} />}
+        {view === 'dashboard' && mode === 'op' && <OPDashboard data={data} setView={setView} onEvent={fireEvent} />}
         {view === 'dashboard' && mode === 'drill' && <DrillStub data={data} />}
         {view === 'methane' && <MethaneIntake data={data} setView={setView} fireEvent={fireEvent} />}
         {view === 'cop' && <CopDispatch data={data} fireEvent={fireEvent} />}
-        {view === 'iap' && <IAPStub data={data} />}
+        {view === 'iap' && <IAPWorkspace fireEvent={fireEvent} />}
         {view === 'facility' && <FacilityCoord data={data} fireEvent={fireEvent} />}
         {view === 'control' && <ControlRoom data={data} fireEvent={fireEvent} onPushInject={pushInject} onUpdateGate={updateGate} />}
         {view === 'evaluation' && <EvaluationDashboard data={data} fireEvent={fireEvent} />}
@@ -468,101 +469,3 @@ function DrillStub({ data }: { data: Data }) {
   );
 }
 
-/* ─── IAPStub ─────────────────────────────────────────────── */
-function IAPStub({ data }: { data: Data }) {
-  const [t, setT] = useState('objectives');
-  const tabs: [string, string][] = [
-    ['objectives', 'วัตถุประสงค์'], ['organization', 'โครงสร้างองค์กร'],
-    ['comms', 'การสื่อสาร'], ['medical_plan', 'แผนการแพทย์'],
-    ['safety_plan', 'แผนความปลอดภัย'], ['resources', 'ทรัพยากร'], ['approval', 'การอนุมัติ'],
-  ];
-  return (
-    <div className="content">
-      <div className="page-head">
-        <div>
-          <div className="eyebrow">โหมดปฏิบัติการ · แผน IAP</div>
-          <h1>แผนปฏิบัติการเหตุ (IAP) · v2.1</h1>
-          <div className="sub">{data.incident.code} · {data.incident.op_period} · อนุมัติ T+03:58 · ทบทวนถัดไป T+05:00</div>
-        </div>
-        <div className="actions">
-          <button className="btn"><Icon name="refresh" size={14} /> เวอร์ชันใหม่</button>
-          <button className="btn primary"><Icon name="check" size={14} /> ส่งขออนุมัติ</button>
-        </div>
-      </div>
-
-      <div className="grid" style={{ gridTemplateColumns: '1fr 280px', gap: 12 }}>
-        <div className="panel">
-          <div className="tabs">
-            {tabs.map(([x, lbl]) => (
-              <button key={x} className={'tab' + (t === x ? ' active' : '')} onClick={() => setT(x)}>{lbl}</button>
-            ))}
-          </div>
-          <div className="panel-body">
-            {t === 'objectives' ? (
-              <div style={{ display: 'grid', gap: 10 }}>
-                {[
-                  { code: 'OBJ-1', title: 'ปลอดภัยชีวิต', body: 'คัดแยกและอพยพผู้ป่วย P1 ทั้งหมดไปยัง Role 3+ ภายใน 60 นาทีหลังพบตัวครั้งแรก · ตั้งจุดรวมผู้ป่วยที่ CCP-1 รองรับ Surge 40 ราย' },
-                  { code: 'OBJ-2', title: 'ขยายเหตุอยู่ในวงจำกัด', body: 'รักษาเส้นทางเข้าผ่านเรือพยาบาล ขณะสะพานสิรินธรปิด · ประสาน ปภ.ปภ. ควบคุมฝูงชนที่จุดตั้งสถานี' },
-                  { code: 'OBJ-3', title: 'บริหารขีดความสามารถรพ.', body: 'เบี่ยง P1 ไปรามาธิบดี/จุฬาฯ ขณะศิริราช (Role 2) อยู่ในสถานะ divert · เรียก CoE พมก. รองรับการผ่าตัดไขซับซ้อน' },
-                  { code: 'OBJ-4', title: 'การจัดการข้อมูล', body: 'ส่ง SITREP ไปยัง EOC กรุงเทพฯ ทุก 30 นาที · แถลงข่าวสื่อภายใน 2 ชม. · เป้าหมายความครบถ้วน COP 95%' },
-                ].map(o => (
-                  <div key={o.code} style={{ padding: 12, background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span className="badge cyan">{o.code}</span>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{o.title}</div>
-                    </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>{o.body}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-3)' }}>
-                <Icon name="plan" size={36} color="var(--text-4)" />
-                <div style={{ marginTop: 10, fontSize: 13 }}>ส่วน {tabs.find(x => x[0] === t)?.[1]}</div>
-                <div style={{ fontSize: 11.5, marginTop: 4 }}>กด "เวอร์ชันใหม่" เพื่อแยกเวอร์ชัน ข้อมูลของการอนุมัติถูกเก็บ</div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="col">
-          <Panel title="วงจร IAP">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[
-                { p: 'ร่าง (Draft)', time: 'T+03:30', done: true },
-                { p: 'Brief ความปลอดภัย', time: 'T+03:45', done: true },
-                { p: 'อนุมัติ', time: 'T+03:58', done: true, active: true },
-                { p: 'ส่งกำลังรอบ 3', time: 'T+04:15', done: false },
-                { p: 'ทบทวน', time: 'T+05:00', done: false },
-                { p: 'OP ถัดไป', time: 'T+08:00', done: false },
-              ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 50, background: item.active ? 'var(--cyan)' : item.done ? 'var(--green)' : 'var(--bg-3)', boxShadow: item.active ? '0 0 8px var(--cyan)' : 'none' }} />
-                  <span style={{ flex: 1, fontSize: 12, fontWeight: item.active ? 600 : 500, color: item.done ? 'var(--text-1)' : 'var(--text-3)' }}>{item.p}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)' }}>{item.time}</span>
-                </div>
-              ))}
-            </div>
-          </Panel>
-          <Panel title="ขั้นตอนการอนุมัติ">
-            <div style={{ display: 'grid', gap: 8 }}>
-              {[
-                { who: 'พ.อ. สุริยะ พ.', role: 'ผู้บัญชาการเหตุ', action: 'ร่างแผน', time: 'T+03:30' },
-                { who: 'ร.อ. ศิริน ก.', role: 'จพ.ความปลอดภัย', action: 'Brief ความปลอดภัย', time: 'T+03:45' },
-                { who: 'พ.อ. อานันต์ ว.', role: 'ผอ. JOC', action: 'อนุมัติ v2.1', time: 'T+03:58' },
-              ].map((a, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, padding: 8, background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', width: 48, flexShrink: 0 }}>{a.time}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500 }}>{a.who}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{a.action} · {a.role}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Panel>
-        </div>
-      </div>
-    </div>
-  );
-}

@@ -1,96 +1,459 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Icon } from './icon';
-import { StatusBadge, Triage, Readiness, SafetyGate, Metric, Panel, EventRow, KV } from './shared';
+import { StatusBadge, Triage, SafetyGate, Metric, Panel, EventRow, KV } from './shared';
 import { COPMap } from './cop-map';
+import { useAppContextSafe } from '@/components/providers/app-context-provider';
+import { useOpDashboard } from '@/lib/iodp/use-op-dashboard';
+import type {
+  OpSummary, OpGate, OpResource, OpFacility, PatientCounts, CopMarker, IapInfo, SessionInfo,
+} from '@/lib/iodp/use-op-dashboard';
+import { methaneSchema } from '@/lib/validators/methane';
+import { createIncidentFromMethane } from '@/actions/incidents.actions';
+import { setActiveIncidentAction } from '@/actions/context.actions';
 
 type Data = any;
 type FireEvent = (e: { severity: string; title: string; body: string }) => void;
 
-export function OPDashboard({ data, setView }: { data: Data; setView: (v: string) => void }) {
+// ─── Metric computation ───────────────────────────────────────────────────────
+
+function buildMetrics(
+  summary: OpSummary,
+  patients: PatientCounts,
+  gates: OpGate[],
+  resources: OpResource[],
+  facilities: OpFacility[],
+  copMarkers: CopMarker[],
+  iap: IapInfo | null,
+  session: SessionInfo | null,
+) {
+  const critGates = gates.filter(g => g.status === 'failed').length
+  const overloadFacilities = facilities.filter(f => f.status !== 'normal' || f.load_pct > 80)
+  const enRoute = resources.filter(r => r.status === 'en_route').length
+  const responseLevel = session?.meta?.response_level ?? 'ไม่ระบุ'
+
+  // COP completeness from markers
+  const totalMarkers = copMarkers.length
+  const activeMarkers = copMarkers.filter(m => m.status === 'active').length
+  const copPct = totalMarkers > 0 ? Math.round((activeMarkers / totalMarkers) * 100) : 0
+
+  return [
+    {
+      label: 'ผู้ป่วยที่ปฏิบัติการ',
+      value: patients.total,
+      unit: 'ราย',
+      footer: `P1 ${patients.p1} · P2 ${patients.p2} · P3 ${patients.p3} · ⬛ ${patients.black}`,
+      tone: patients.p1 > 0 ? 'critical' : patients.total > 0 ? 'warn' : '',
+    },
+    {
+      label: 'P1 วิกฤต',
+      value: patients.p1,
+      unit: 'ราย',
+      footer: `P2 ${patients.p2} · P3 ${patients.p3}`,
+      tone: patients.p1 > 0 ? 'critical' : 'ok',
+    },
+    {
+      label: 'ทีมที่ส่ง',
+      value: summary.active_resources,
+      unit: '',
+      footer: enRoute > 0 ? `${enRoute} กำลังเดินทาง` : 'ไม่มีระหว่างเดินทาง',
+      tone: '',
+    },
+    {
+      label: 'ด่านความปลอดภัย',
+      value: critGates > 0 ? critGates : summary.gates_passed,
+      unit: critGates > 0 ? 'วิกฤต' : 'ผ่าน',
+      footer: `ผ่าน ${summary.gates_passed} / ${summary.gates_blocking_total} ด่าน`,
+      tone: critGates > 0 ? 'critical' : 'ok',
+    },
+    {
+      label: 'รพ. โหลดสูง / เบี่ยง',
+      value: overloadFacilities.length,
+      unit: 'แห่ง',
+      footer: overloadFacilities.length > 0
+        ? overloadFacilities.map(f => f.site_name).slice(0, 2).join(' · ')
+        : 'ทุก รพ. พร้อมรับ',
+      tone: overloadFacilities.length > 0 ? 'warn' : 'ok',
+    },
+    {
+      label: 'ความครบถ้วน COP',
+      value: totalMarkers > 0 ? copPct : summary.participant_count > 0 ? Math.round((summary.participant_count / 100) * 100) : 0,
+      unit: '%',
+      footer: totalMarkers > 0 ? `${activeMarkers}/${totalMarkers} จุด · ${responseLevel}` : `IAP ${iap ? `v${iap.version}` : '—'} · ${responseLevel}`,
+      tone: 'ok',
+    },
+  ]
+}
+
+// ─── State components ─────────────────────────────────────────────────────────
+
+function EmptyIncidentState({ setView }: { setView: (v: string) => void }) {
   return (
     <div className="content">
+      <div style={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}>
+        <div style={{ textAlign: 'center', maxWidth: 420 }}>
+          <Icon name="map" size={52} color="var(--text-4)" />
+          <h2 style={{ marginTop: 16, fontSize: 20, fontWeight: 600, color: 'var(--text-1)' }}>ยังไม่ได้เลือกเหตุการณ์</h2>
+          <p style={{ marginTop: 8, fontSize: 13, color: 'var(--text-3)', lineHeight: 1.7 }}>
+            เลือกเหตุการณ์ที่ใช้งานอยู่จากแถบบริบทด้านบน<br />เพื่อดูภาพรวมสั่งการแบบสดพร้อม Realtime
+          </p>
+          <button className="btn primary" style={{ marginTop: 20 }} onClick={() => setView('methane')}>
+            <Icon name="plus" size={14} /> เปิดเหตุใหม่ (METHANE)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="content">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ height: 64, background: 'var(--bg-2)', borderRadius: 'var(--radius)', opacity: 0.6 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} style={{ height: 82, background: 'var(--bg-2)', borderRadius: 'var(--radius)', opacity: 0.5 }} />
+          ))}
+        </div>
+        <div style={{ height: 48, background: 'var(--bg-2)', borderRadius: 'var(--radius)', opacity: 0.4 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+          <div style={{ height: 440, background: 'var(--bg-2)', borderRadius: 'var(--radius)', opacity: 0.5 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ height: 200, background: 'var(--bg-2)', borderRadius: 'var(--radius)', opacity: 0.5 }} />
+            <div style={{ height: 220, background: 'var(--bg-2)', borderRadius: 'var(--radius)', opacity: 0.5 }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="content">
+      <div style={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}>
+        <div style={{ textAlign: 'center', maxWidth: 360 }}>
+          <Icon name="incident" size={48} color="var(--red)" />
+          <h2 style={{ marginTop: 16, fontSize: 18, fontWeight: 600 }}>โหลดข้อมูลล้มเหลว</h2>
+          <p style={{ marginTop: 6, fontSize: 13, color: 'var(--text-3)' }}>{message}</p>
+          <button className="btn" style={{ marginTop: 16 }} onClick={onRetry}>
+            <Icon name="refresh" size={13} /> ลองอีกครั้ง
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Operational Status Strip ──────────────────────────────────────────────────
+
+function OpStatusStrip({ summary, session, iap }: { summary: OpSummary; session: SessionInfo | null; iap: IapInfo | null }) {
+  const responseLevel = session?.meta?.response_level ?? 'ไม่ระบุ'
+  const commandMode   = session?.meta?.command_mode ?? 'UNIFIED'
+  const opPeriod      = session?.op_period ?? '—'
+
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleDateString('th-TH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  const iapLabel = iap
+    ? `v${iap.version} · ${iap.approved ? 'อนุมัติแล้ว' : 'ร่าง'}`
+    : 'ยังไม่มี IAP'
+
+  const iapTone = iap?.approved ? 'var(--green)' : iap ? 'var(--amber)' : 'var(--text-3)'
+
+  const statusTone: Record<string, string> = {
+    active: 'var(--cyan)', paused: 'var(--amber)', planned: 'var(--text-3)', completed: 'var(--green)',
+  }
+  const statusLabel: Record<string, string> = {
+    active: 'ดำเนินการ', paused: 'หยุดชั่วคราว', planned: 'วางแผน', completed: 'เสร็จสิ้น',
+  }
+
+  const col = (label: string, value: React.ReactNode, tone?: string) => (
+    <div style={{ borderRight: '1px solid var(--border)', paddingRight: 14, paddingLeft: 14 }}>
+      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: tone ?? 'var(--text-1)' }}>{value}</div>
+    </div>
+  )
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 0, marginBottom: 12,
+      background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)',
+      padding: '8px 0', overflow: 'hidden',
+    }}>
+      {col('สถานะ', statusLabel[summary.status] ?? summary.status, statusTone[summary.status] ?? 'var(--text-1)')}
+      {col('ระดับตอบสนอง', responseLevel, 'var(--amber)')}
+      {col('รูปแบบสั่งการ', commandMode)}
+      {col('เวอร์ชัน IAP', iapLabel, iapTone)}
+      {col('ห้วงปฏิบัติ', opPeriod)}
+      {iap?.period_start && col('ห้วงเริ่ม', fmtDate(iap.period_start))}
+      {iap?.period_end   && col('ห้วงสิ้นสุด', fmtDate(iap.period_end))}
+      <div style={{ flex: 1, paddingLeft: 14 }}>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 3 }}>หน่วยนำ</div>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>{summary.organization_name ?? '—'}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main OPDashboard ─────────────────────────────────────────────────────────
+
+export function OPDashboard({
+  data,
+  setView,
+  onEvent,
+}: {
+  data: Data;
+  setView: (v: string) => void;
+  onEvent?: FireEvent;
+}) {
+  const appCtx = useAppContextSafe()
+  const activeIncidentId = appCtx?.activeIncidentId ?? null
+
+  const {
+    summary, session, iap, patientCounts, copMarkers,
+    events, gates, resources, facilities, notifications,
+    loading, error, refresh,
+  } = useOpDashboard(activeIncidentId, onEvent)
+
+  // Merge real COP markers into data for the map
+  const copMapData = useMemo(() => {
+    if (copMarkers.length === 0) return data
+    const sites = copMarkers
+      .filter(m => m.marker_type === 'site' || m.marker_type === 'team')
+      .map(m => ({ id: m.code, lat: m.lat, lng: m.lng, type: m.sub_type || m.marker_type, status: m.status, name: m.name }))
+    const patient_markers = copMarkers
+      .filter(m => m.marker_type === 'patient' && m.lat != null && m.lng != null)
+      .map(m => ({ lat: m.lat!, lng: m.lng!, lvl: m.triage_level ?? 'P3' }))
+    return { ...data, sites, patient_markers }
+  }, [copMarkers, data])
+
+  const metrics = useMemo(
+    () => summary
+      ? buildMetrics(summary, patientCounts, gates, resources, facilities, copMarkers, iap, session)
+      : data.metrics_op,
+    [summary, patientCounts, gates, resources, facilities, copMarkers, iap, session, data.metrics_op],
+  )
+
+  const displayGates  = gates.length > 0  ? gates  : data.safety_gates
+  const displayEvents = events.length > 0 ? events : data.events
+
+  // ICP panel data — real if available, else IODP demo data
+  const responseLevel = session?.meta?.response_level ?? data.incident.response_level
+  const commandMode   = session?.meta?.command_mode   ?? data.incident.command_mode
+  const leadOrg       = summary?.organization_name    ?? data.incident.lead_org
+  const opPeriod      = session?.op_period             ?? data.incident.op_period
+  const iapLabel      = iap ? `v${iap.version}` : data.incident.iap_version
+  const iapStatus     = iap ? (iap.approved ? 'อนุมัติแล้ว' : 'ร่าง') : 'อนุมัติแล้ว'
+
+  if (!activeIncidentId) return <EmptyIncidentState setView={setView} />
+  if (loading && !summary) return <LoadingSkeleton />
+  if (error && !summary) return <ErrorState message={error} onRetry={refresh} />
+
+  return (
+    <div className="content">
+      {/* Page header */}
       <div className="page-head">
         <div>
           <div className="eyebrow">โหมดปฏิบัติการ · ภาพรวมสั่งการ</div>
           <h1>ภาพรวมสถานการณ์ร่วม (COP)</h1>
-          <div className="sub">{data.incident.code} · {data.incident.title_th} · สั่งการแบบ {data.incident.command_mode} · {data.incident.lead_org}</div>
+          <div className="sub">
+            <span className="badge cyan" style={{ marginRight: 6 }}><span className="dot" />สด</span>
+            {summary?.title ?? data.incident.title_th}
+            {summary?.organization_name ? ` · ${summary.organization_name}` : ''}
+            {summary?.location ? ` · ${summary.location}` : ''}
+          </div>
         </div>
         <div className="actions">
-          <button className="btn" onClick={() => setView('methane')}><Icon name="plus" size={14}/> เปิดเหตุใหม่ (METHANE)</button>
-          <button className="btn primary" onClick={() => setView('cop')}><Icon name="map" size={14}/> เปิดแผนที่ COP</button>
+          <button className="btn sm ghost" onClick={refresh} disabled={loading}>
+            <Icon name="refresh" size={12} />{loading ? ' กำลังโหลด…' : ' รีเฟรช'}
+          </button>
+          <button className="btn" onClick={() => setView('methane')}>
+            <Icon name="plus" size={14} /> เปิดเหตุใหม่ (METHANE)
+          </button>
+          <button className="btn primary" onClick={() => setView('cop')}>
+            <Icon name="map" size={14} /> เปิดแผนที่ COP
+          </button>
         </div>
       </div>
 
+      {/* 6 metric cards covering all 12 spec fields */}
       <div className="grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)', marginBottom: 12 }}>
-        {data.metrics_op.map((m: any, i: number) => <Metric key={i} {...m}/>)}
+        {metrics.map((m: any, i: number) => <Metric key={i} {...m} />)}
       </div>
 
+      {/* Operational status strip: response_level, IAP, command_mode, op_period */}
+      {summary && <OpStatusStrip summary={summary} session={session} iap={iap} />}
+
+      {/* Notification banner for unread critical notifications */}
+      {notifications.filter(n => n.type === 'critical').map(n => (
+        <div key={n.id} style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+          background: 'rgba(220, 38, 38, 0.08)', border: '1px solid rgba(220, 38, 38, 0.25)',
+          borderRadius: 'var(--radius)', marginBottom: 8, fontSize: 12.5,
+        }}>
+          <Icon name="incident" size={14} color="var(--red)" />
+          <span style={{ fontWeight: 600, color: 'var(--red)' }}>{n.title}</span>
+          {n.body && <span style={{ color: 'var(--text-2)' }}>{n.body}</span>}
+        </div>
+      ))}
+
+      {/* Main grid: COP map + right panel */}
       <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', marginBottom: 12 }}>
-        <Panel title="ภาพรวมสถานการณ์ — ตลิ่งชัน" actions={
-          <><button className="btn sm ghost"><Icon name="filter" size={12}/> ชั้นข้อมูล</button><button className="btn sm ghost"><Icon name="refresh" size={12}/></button></>
-        } flush>
-          <COPMap data={data} height={420}/>
+        <Panel
+          title={`ภาพรวมสถานการณ์${summary?.location ? ` — ${summary.location}` : ''}`}
+          actions={
+            <>
+              <button className="btn sm ghost"><Icon name="filter" size={12} /> ชั้นข้อมูล</button>
+              {copMarkers.length > 0 && (
+                <span className="badge cyan" style={{ fontSize: 10.5 }}>
+                  <span className="dot" />{copMarkers.length} จุดสด
+                </span>
+              )}
+              <button className="btn sm ghost" onClick={refresh}><Icon name="refresh" size={12} /></button>
+            </>
+          }
+          flush
+        >
+          <COPMap data={copMapData} height={420} />
         </Panel>
         <div className="col">
-          <Panel title="ศูนย์สั่งการเหตุ" actions={<button className="btn sm ghost">แก้ไข</button>}>
+          {/* ICP / Unified Command panel */}
+          <Panel title="ศูนย์สั่งการเหตุ (ICP)" actions={<button className="btn sm ghost">แก้ไข</button>}>
             <KV pairs={[
-              ['รูปแบบศูนย์สั่งการ', <StatusBadge key="cmd" status="active" label={data.incident.command_mode}/>],
-              ['หน่วยนำ', data.incident.lead_org],
-              ['ห้วงปฏิบัติ', data.incident.op_period + ' · T+04:00–08:00'],
-              ['เวอร์ชัน IAP', <span key="iap" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span className="badge cyan">{data.incident.iap_version}</span>อนุมัติแล้ว T+03:58</span>],
-              ['ระดับการตอบสนอง', <span key="lvl" className="badge amber"><span className="dot"/>{ data.incident.response_level}</span>],
-              ['เริ่มเหตุ', data.incident.started + ' · 4 ชม. 12 นาที ที่แล้ว'],
-            ]}/>
+              ['รูปแบบศูนย์สั่งการ', <StatusBadge key="cmd" status="active" label={commandMode} />],
+              ['หน่วยนำ', leadOrg],
+              ['ห้วงปฏิบัติ', opPeriod],
+              ['เวอร์ชัน IAP',
+                <span key="iap" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className={`badge ${iap?.approved ? 'cyan' : 'amber'}`}>{iapLabel}</span>
+                  {iapStatus}
+                  {iap?.approved_at ? ` · ${new Date(iap.approved_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                </span>
+              ],
+              ['ระดับการตอบสนอง', <span key="lvl" className="badge amber"><span className="dot" />{responseLevel}</span>],
+              ['เริ่มเหตุ', data.incident.started],
+            ]} />
           </Panel>
-          <Panel title="ด่านความปลอดภัย (Safety Gates)" count={data.safety_gates.length} actions={<button className="btn sm ghost">จัดการ</button>}>
+
+          {/* Safety gates */}
+          <Panel
+            title="ด่านความปลอดภัย"
+            count={displayGates.length}
+            actions={<button className="btn sm ghost">จัดการ</button>}
+          >
             <div style={{ display: 'grid', gap: 6 }}>
-              {data.safety_gates.map((g: any) => (
-                <div key={g.code} className="between" style={{ padding: '6px 0', borderBottom: '1px solid var(--border-soft)' }}>
+              {displayGates.map((g: any) => (
+                <div key={g.code ?? g.id} className="between"
+                  style={{ padding: '6px 0', borderBottom: '1px solid var(--border-soft)' }}>
                   <div>
                     <div style={{ fontSize: 11.5, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{g.code}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{g.title}</div>
                   </div>
-                  <SafetyGate status={g.status} code={g.status.toUpperCase()}/>
+                  <SafetyGate status={g.status} code={g.status.toUpperCase()} />
                 </div>
               ))}
+              {displayGates.length === 0 && (
+                <div style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', padding: '12px 0' }}>
+                  ยังไม่มีด่านความปลอดภัย
+                </div>
+              )}
             </div>
           </Panel>
         </div>
       </div>
 
+      {/* Bottom grid: event log + dispatch */}
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <Panel title="บันทึกเหตุการณ์ระบบ" count={data.events.length} actions={
-          <><button className="btn sm ghost"><Icon name="filter" size={12}/> กรอง</button><button className="btn sm ghost"><Icon name="download" size={12}/></button></>
-        }>
+        <Panel
+          title="บันทึกเหตุการณ์ระบบ"
+          count={displayEvents.length}
+          actions={
+            <>
+              <button className="btn sm ghost"><Icon name="filter" size={12} /> กรอง</button>
+              <button className="btn sm ghost"><Icon name="download" size={12} /></button>
+            </>
+          }
+        >
           <div style={{ maxHeight: 280, overflow: 'auto' }}>
-            {data.events.map((e: any, i: number) => <EventRow key={i} {...e}/>)}
+            {displayEvents.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', padding: '24px 0' }}>
+                ยังไม่มีเหตุการณ์
+              </div>
+            ) : (
+              displayEvents.map((e: any, i: number) => <EventRow key={e.id ?? i} {...e} />)
+            )}
           </div>
         </Panel>
-        <Panel title="การส่งกำลังที่ดำเนินอยู่" count={data.teams.filter((t: any) => t.status !== 'available').length}>
-          <table className="tbl">
-            <thead><tr><th>ทรัพยากร</th><th>สถานะ</th><th>ปลายทาง</th><th>ความพร้อม</th></tr></thead>
-            <tbody>
-              {data.teams.filter((t: any) => t.status !== 'available').slice(0, 7).map((t: any) => (
-                <tr key={t.id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 24, height: 24, background: 'var(--bg-3)', borderRadius: 4, display: 'grid', placeItems: 'center' }}>
-                        <Icon name={t.type === 'drone' ? 'drone' : t.type === 'boat' ? 'boat' : t.type === 'helicopter' ? 'helicopter' : t.type === 'truck' ? 'truck' : t.type === 'safety' ? 'shield' : 'user'} size={12}/>
+
+        <Panel
+          title="การส่งกำลังที่ดำเนินอยู่"
+          count={resources.length > 0 ? resources.length : data.teams.filter((t: any) => t.status !== 'available').length}
+        >
+          {resources.length > 0 ? (
+            <table className="tbl">
+              <thead>
+                <tr><th>รหัส</th><th>ทรัพยากร</th><th>ปลายทาง</th><th>สถานะ</th><th>เวลา</th></tr>
+              </thead>
+              <tbody>
+                {resources.map(r => (
+                  <tr key={r.id}>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)' }}>
+                      {r.resource_code ?? '—'}
+                    </td>
+                    <td>
+                      <div style={{ fontSize: 12, fontWeight: 500 }}>{r.resource_name ?? '—'}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{r.resource_type ?? ''}</div>
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.location ?? r.assigned_to ?? '—'}</td>
+                    <td>
+                      <StatusBadge
+                        status={r.priority === 'immediate' ? 'critical' : r.priority === 'urgent' ? 'warning' : r.status}
+                        label={r.status.replace('_', ' ')}
+                      />
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-3)' }}>
+                      {r.duration_minutes > 0 ? `${r.duration_minutes}m` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="tbl">
+              <thead><tr><th>ทรัพยากร</th><th>สถานะ</th><th>ปลายทาง</th></tr></thead>
+              <tbody>
+                {data.teams.filter((t: any) => t.status !== 'available').slice(0, 7).map((t: any) => (
+                  <tr key={t.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 24, height: 24, background: 'var(--bg-3)', borderRadius: 4, display: 'grid', placeItems: 'center' }}>
+                          <Icon name={t.type === 'drone' ? 'drone' : t.type === 'boat' ? 'boat' : t.type === 'helicopter' ? 'helicopter' : t.type === 'truck' ? 'truck' : t.type === 'safety' ? 'shield' : 'user'} size={12} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 500 }}>{t.code}</div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-3)' }}>{t.org}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 500 }}>{t.code}</div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-3)' }}>{t.org}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><StatusBadge status={t.status} label={t.status.replace('_', ' ')}/></td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{t.site}</td>
-                  <td><Readiness percent={t.readiness}/></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                    <td><StatusBadge status={t.status} label={t.status.replace('_', ' ')} /></td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{t.site}</td>
+                  </tr>
+                ))}
+                {data.teams.filter((t: any) => t.status !== 'available').length === 0 && (
+                  <tr>
+                    <td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12, padding: '16px 0' }}>
+                      ไม่มีการส่งกำลังที่ดำเนินอยู่
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </Panel>
       </div>
     </div>
@@ -98,26 +461,114 @@ export function OPDashboard({ data, setView }: { data: Data; setView: (v: string
 }
 
 export function MethaneIntake({ data, setView, fireEvent }: { data: Data; setView: (v: string) => void; fireEvent: FireEvent }) {
+  const router = useRouter();
+  const appCtx = useAppContextSafe();
+
   const [form, setForm] = useState({
+    major_incident: false,
+    incident_type: 'น้ำท่วม',
+    exact_location: '',
     mechanism: 'น้ำท่วมฉับพลัน + คนติดอยู่',
     hazards: ['น้ำท่วม', 'กระแสน้ำ'],
     access: 'เส้นทางหลักปิด · เรือเท่านั้น · จุดนัดพบ: ท่าน้ำวัดไก่เตี้ย',
-    casualties: { p1: 8, p2: 24, p3: 47, black: 3 },
+    casualties: { p1: 8, p2: 24, p3: 47, black: 3, unknown: 0 },
     services: ['พยาบาลระดับสูง', 'USAR', 'เรือกู้ภัย'],
-    reporter: 'ผอ. เขตตลิ่งชัน',
-    safety_gates: { zone: 'warm', route: 'pending', security: 'passed', hospital: 'pending', authority: 'passed' },
+    lead_org: appCtx?.organizationName ?? '',
+    initial_command_mode: 'unified' as 'unified' | 'single' | 'joint',
+    safety_gates: { zone: 'warm' as const, route: 'pending' as const, security: 'passed' as const, hospital: 'pending' as const, authority: 'passed' as const },
   });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [gateWarning, setGateWarning] = useState(false);
+  const [createdDrillId, setCreatedDrillId] = useState<string | null>(null);
 
   const hazardOptions = ['น้ำท่วม', 'กระแสน้ำ', 'สารอันตราย', 'ไฟฟ้า', 'โครงสร้างไม่มั่นคง', 'ฝูงชน'];
   const serviceOptions = ['พยาบาลระดับสูง', 'USAR', 'เรือกู้ภัย', 'HEMS', 'ตำรวจ', 'EOD'];
+  const commandModes: Array<['unified' | 'single' | 'joint', string]> = [['unified', 'Unified Command'], ['single', 'Single Command'], ['joint', 'Joint Command']];
 
   const setHazard = (h: string) => setForm(f => ({ ...f, hazards: f.hazards.includes(h) ? f.hazards.filter(x => x !== h) : [...f.hazards, h] }));
   const setService = (s: string) => setForm(f => ({ ...f, services: f.services.includes(s) ? f.services.filter(x => x !== s) : [...f.services, s] }));
 
-  const submit = () => {
-    fireEvent({ severity: 'info', title: 'INCIDENT_OPENED · ' + data.incident.code, body: 'METHANE ส่งแล้ว · ระดับ 3 · IAP v1.0 ร่าง' });
+  const goToDashboard = useCallback(() => {
+    router.refresh();
     setView('dashboard');
+  }, [router, setView]);
+
+  const submit = async () => {
+    setErrors({});
+    setSubmitError(null);
+
+    const parseResult = methaneSchema.safeParse({
+      major_incident: form.major_incident,
+      incident_type: form.incident_type,
+      exact_location: form.exact_location,
+      mechanism: form.mechanism,
+      hazards: form.hazards,
+      access: form.access,
+      casualties: form.casualties,
+      emergency_services: form.services,
+      lead_org: form.lead_org,
+      initial_command_mode: form.initial_command_mode,
+      safety_gates: form.safety_gates,
+      organization_id: appCtx?.organizationId ?? undefined,
+    });
+
+    if (!parseResult.success) {
+      const fieldErrors: Record<string, string> = {};
+      for (const issue of parseResult.error.issues) {
+        const key = issue.path.join('.');
+        fieldErrors[key] = issue.message;
+      }
+      setErrors(fieldErrors);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const result = await createIncidentFromMethane(parseResult.data);
+      if (!result.ok) {
+        setSubmitError(result.message);
+        return;
+      }
+
+      await setActiveIncidentAction(result.data.drill_id);
+      setCreatedDrillId(result.data.drill_id);
+
+      fireEvent({
+        severity: result.data.safety_gate_critical ? 'critical' : 'info',
+        title: 'INCIDENT_CREATED',
+        body: `เปิดเหตุแล้ว · ${form.incident_type} · IAP v1 ร่าง`,
+      });
+
+      if (result.data.safety_gate_critical) {
+        setGateWarning(true);
+      } else {
+        goToDashboard();
+      }
+    } catch (e: any) {
+      setSubmitError(e?.message ?? 'เกิดข้อผิดพลาด กรุณาลองใหม่');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (gateWarning) {
+    return (
+      <div className="content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div style={{ background: 'var(--bg-2)', border: '1px solid var(--red)', borderRadius: 'var(--radius-lg)', padding: 32, maxWidth: 480, textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+          <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--red)', fontWeight: 700, fontSize: 14, letterSpacing: '0.06em', marginBottom: 8 }}>SAFETY GATE — CRITICAL</div>
+          <div style={{ color: 'var(--text-1)', fontSize: 15, marginBottom: 8 }}>Incident สร้างแล้ว แต่มีด่านความปลอดภัยที่ต้องแก้ไขก่อนปฏิบัติการ</div>
+          <div style={{ color: 'var(--text-2)', fontSize: 12, marginBottom: 24 }}>ตรวจสอบ Safety Gate ในหน้า Dashboard ทันที</div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button className="btn" onClick={goToDashboard}>ไปที่ Dashboard</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="content">
@@ -125,22 +576,49 @@ export function MethaneIntake({ data, setView, fireEvent }: { data: Data; setVie
         <div>
           <div className="eyebrow">โหมดปฏิบัติการ · รับแจ้งเหตุ</div>
           <h1>แบบรายงาน METHANE</h1>
-          <div className="sub">กรอกให้ครบ 5 หัวข้อ → ระบบสร้าง Incident + IAP อัตโนมัติ</div>
+          <div className="sub">กรอกให้ครบทุกหัวข้อ → ระบบสร้าง Incident + Safety Gates + IAP อัตโนมัติ</div>
         </div>
         <div className="actions">
-          <button className="btn ghost" onClick={() => setView('dashboard')}>ยกเลิก</button>
-          <button className="btn primary" onClick={submit}><Icon name="arrow" size={14}/> ส่งรายงาน METHANE</button>
+          <button className="btn ghost" onClick={() => setView('dashboard')} disabled={submitting}>ยกเลิก</button>
+          <button className="btn primary" onClick={submit} disabled={submitting}>
+            {submitting ? <><Icon name="refresh" size={14}/> กำลังส่ง...</> : <><Icon name="arrow" size={14}/> ส่งรายงาน METHANE</>}
+          </button>
         </div>
       </div>
+      {submitError && (
+        <div style={{ background: 'var(--red-dim, rgba(239,68,68,0.1))', border: '1px solid var(--red)', borderRadius: 'var(--radius)', padding: '10px 14px', marginBottom: 12, color: 'var(--red)', fontSize: 13 }}>
+          {submitError}
+        </div>
+      )}
       <div className="grid" style={{ gridTemplateColumns: '1.5fr 1fr', gap: 12 }}>
-        <Panel title="M · H · A · N · E — รายงาน">
+        <Panel title="M · E · T · H · A · N · E — รายงาน">
           <div style={{ display: 'grid', gap: 14 }}>
-            <div className="field">
-              <label>M · กลไก / ลักษณะเหตุ (Mechanism)</label>
-              <input className="input" value={form.mechanism} onChange={e => setForm(f => ({ ...f, mechanism: e.target.value }))}/>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: form.major_incident ? 'var(--red-dim, rgba(239,68,68,0.12))' : 'var(--bg-2)', border: `1px solid ${form.major_incident ? 'var(--red)' : 'var(--border)'}`, borderRadius: 'var(--radius)', cursor: 'pointer' }}
+              onClick={() => setForm(f => ({ ...f, major_incident: !f.major_incident }))}>
+              <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${form.major_incident ? 'var(--red)' : 'var(--border)'}`, background: form.major_incident ? 'var(--red)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {form.major_incident && <Icon name="check" size={11} color="#fff"/>}
+              </div>
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>M · Major Incident Declaration</div>
+                <div style={{ fontSize: 13, color: form.major_incident ? 'var(--red)' : 'var(--text-2)' }}>{form.major_incident ? '⚠ ประกาศเหตุการณ์ใหญ่ — MAJOR INCIDENT DECLARED' : 'ยังไม่ประกาศ Major Incident'}</div>
+              </div>
+            </div>
+            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="field">
+                <label>E · สถานที่เกิดเหตุ (Exact Location) {errors['exact_location'] && <span style={{ color: 'var(--red)', marginLeft: 6 }}>{errors['exact_location']}</span>}</label>
+                <input className="input" placeholder="เช่น ซอยสุขุมวิท 22 เขตคลองเตย กทม." value={form.exact_location} onChange={e => setForm(f => ({ ...f, exact_location: e.target.value }))} style={errors['exact_location'] ? { borderColor: 'var(--red)' } : undefined}/>
+              </div>
+              <div className="field">
+                <label>T · ประเภทเหตุ (Type) {errors['incident_type'] && <span style={{ color: 'var(--red)', marginLeft: 6 }}>{errors['incident_type']}</span>}</label>
+                <input className="input" placeholder="เช่น น้ำท่วม, อัคคีภัย, อุบัติเหตุหมู่" value={form.incident_type} onChange={e => setForm(f => ({ ...f, incident_type: e.target.value }))} style={errors['incident_type'] ? { borderColor: 'var(--red)' } : undefined}/>
+              </div>
             </div>
             <div className="field">
-              <label>H · อันตราย (Hazards) <span className="hint">เลือกได้หลายข้อ</span></label>
+              <label>M · กลไก / ลักษณะเหตุ (Mechanism) {errors['mechanism'] && <span style={{ color: 'var(--red)', marginLeft: 6 }}>{errors['mechanism']}</span>}</label>
+              <input className="input" value={form.mechanism} onChange={e => setForm(f => ({ ...f, mechanism: e.target.value }))} style={errors['mechanism'] ? { borderColor: 'var(--red)' } : undefined}/>
+            </div>
+            <div className="field">
+              <label>H · อันตราย (Hazards) <span className="hint">เลือกได้หลายข้อ</span> {errors['hazards'] && <span style={{ color: 'var(--red)', marginLeft: 6 }}>{errors['hazards']}</span>}</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {hazardOptions.map(h => (
                   <span key={h} className={'chip' + (form.hazards.includes(h) ? ' active' : '')} onClick={() => setHazard(h)}>
@@ -155,18 +633,23 @@ export function MethaneIntake({ data, setView, fireEvent }: { data: Data; setVie
             </div>
             <div className="field">
               <label>N · จำนวนผู้ประสบภัย (Casualties)</label>
-              <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                {['p1', 'p2', 'p3', 'black'].map(k => (
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                {(['p1', 'p2', 'p3', 'black'] as const).map(k => (
                   <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-2)', padding: '8px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
                     <Triage level={k.toUpperCase()}/>
-                    <input type="number" value={(form.casualties as any)[k]} onChange={e => setForm(f => ({ ...f, casualties: { ...f.casualties, [k]: +e.target.value } }))}
+                    <input type="number" min={0} value={form.casualties[k]} onChange={e => setForm(f => ({ ...f, casualties: { ...f.casualties, [k]: Math.max(0, +e.target.value) } }))}
                       style={{ flex: 1, background: 'transparent', border: 0, color: 'var(--text-1)', fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 600, outline: 'none' }}/>
                   </div>
                 ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-2)', padding: '8px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase' }}>UNK</span>
+                  <input type="number" min={0} value={form.casualties.unknown} onChange={e => setForm(f => ({ ...f, casualties: { ...f.casualties, unknown: Math.max(0, +e.target.value) } }))}
+                    style={{ flex: 1, background: 'transparent', border: 0, color: 'var(--text-1)', fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 600, outline: 'none' }}/>
+                </div>
               </div>
             </div>
             <div className="field">
-              <label>E · หน่วยงานที่ต้องการ (Emergency Services)</label>
+              <label>E · หน่วยงานที่ต้องการ (Emergency Services) {errors['emergency_services'] && <span style={{ color: 'var(--red)', marginLeft: 6 }}>{errors['emergency_services']}</span>}</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {serviceOptions.map(s => (
                   <span key={s} className={'chip' + (form.services.includes(s) ? ' active' : '')} onClick={() => setService(s)}>
@@ -181,12 +664,25 @@ export function MethaneIntake({ data, setView, fireEvent }: { data: Data; setVie
           <Panel title="ตรวจด่านความปลอดภัยล่วงหน้า" count={5}>
             <SafetyGatePrecheck form={form} setForm={setForm}/>
           </Panel>
-          <Panel title="ผู้แจ้ง · อำนาจหน้าที่">
-            <KV pairs={[
-              ['ผู้แจ้ง', form.reporter],
-              ['ศูนย์รับแจ้ง', 'Bangkok EOC'],
-              ['Authority Matrix', <span key="auth" className="badge green"><span className="dot"/>หน่วยนำ: พบ.ราชองค์เสนา มพ.</span>],
-            ]}/>
+          <Panel title="หน่วยนำ · รูปแบบการบังคับบัญชา">
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div className="field">
+                <label>หน่วยนำ (Lead Organization) {errors['lead_org'] && <span style={{ color: 'var(--red)', marginLeft: 6 }}>{errors['lead_org']}</span>}</label>
+                <input className="input" placeholder="เช่น พบ.ราชองค์เสนา มพ." value={form.lead_org} onChange={e => setForm(f => ({ ...f, lead_org: e.target.value }))} style={errors['lead_org'] ? { borderColor: 'var(--red)' } : undefined}/>
+              </div>
+              <div className="field">
+                <label>รูปแบบการบังคับบัญชา</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {commandModes.map(([val, label]) => (
+                    <button key={val} className={'chip' + (form.initial_command_mode === val ? ' active' : '')}
+                      style={{ flex: 1, justifyContent: 'center', fontSize: 11 }}
+                      onClick={() => setForm(f => ({ ...f, initial_command_mode: val }))}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </Panel>
           <Panel title="การดำเนินการอัตโนมัติเมื่อส่ง">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-2)' }}>
@@ -235,128 +731,7 @@ function SafetyGatePrecheck({ form, setForm }: { form: any; setForm: any }) {
   );
 }
 
-export function CopDispatch({ data, fireEvent }: { data: Data; fireEvent: FireEvent }) {
-  const [selectedSite, setSelectedSite] = useState<string | null>(null);
-  const [taskForce, setTaskForce] = useState({ name: 'TF-Bravo', capability: 'MED-MCI-TRIAGE', assigned: ['BOAT-02', 'MED-BRAVO', 'SAFETY-1'] });
-  const [filter, setFilter] = useState('all');
-
-  const dispatch = () => fireEvent({ severity: 'info', title: 'ส่งชุดเฉพาะกิจ', body: `${taskForce.name} · 3 ทรัพยากร → SITE-B · สถานะ lifecycle ปรับแล้ว` });
-  const filteredTeams = data.teams.filter((t: any) => filter === 'all' ? true : t.type === filter);
-
-  return (
-    <div className="content">
-      <div className="page-head">
-        <div>
-          <div className="eyebrow">โหมดปฏิบัติการ · COP + ส่งกำลัง</div>
-          <h1>ภาพรวมสถานการณ์ · บอร์ดส่งกำลัง</h1>
-          <div className="sub">ลากจากทะเบียน · สร้างชุดเฉพาะกิจ · ส่งพร้อมตรวจ Safety Gate</div>
-        </div>
-        <div className="actions">
-          <button className="btn ghost"><Icon name="grid" size={14}/> ชั้นข้อมูล</button>
-          <button className="btn"><Icon name="refresh" size={14}/> รีเฟรช</button>
-        </div>
-      </div>
-
-      <div className="grid" style={{ gridTemplateColumns: '1.4fr 1fr', gap: 12, marginBottom: 12 }}>
-        <Panel title="แผนที่ COP · สด" actions={<span className="badge cyan"><span className="dot"/>{data.sites.length} จุด · {data.teams.length} ทีม</span>} flush>
-          <COPMap data={data} height={520} selected={selectedSite} onMarkerClick={setSelectedSite}/>
-        </Panel>
-        <div className="col">
-          <Panel title="สร้างชุดเฉพาะกิจ" actions={<button className="btn sm primary" onClick={dispatch}><Icon name="arrow" size={12}/> ส่ง</button>}>
-            <div className="grid" style={{ gap: 10 }}>
-              <div className="field">
-                <label>ชื่อชุดเฉพาะกิจ</label>
-                <input className="input" value={taskForce.name} onChange={e => setTaskForce(tf => ({ ...tf, name: e.target.value }))}/>
-              </div>
-              <div className="field">
-                <label>ชุดขีดความสามารถ</label>
-                <select className="select" value={taskForce.capability} onChange={e => setTaskForce(tf => ({ ...tf, capability: e.target.value }))}>
-                  {['SEC-EOD-GATE','MED-MCI-TRIAGE','LOG-COLD-CHAIN','FAC-ROLE3-TRAUMA','RES-WATER-SAR'].map(o => <option key={o}>{o}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>มอบหมายจุดปลายทาง</label>
-                <select className="select" defaultValue="SITE-B">
-                  {data.sites.filter((s: any) => s.type === 'incident' || s.type === 'ccp').map((s: any) => (
-                    <option key={s.id}>{s.id} — {s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>ทรัพยากรที่มอบหมาย <span className="hint">{taskForce.assigned.length} / 8</span></label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 8, background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px dashed var(--border-strong)', minHeight: 60 }}>
-                  {taskForce.assigned.map(id => {
-                    const t = data.teams.find((t: any) => t.id === id);
-                    return (
-                      <span key={id} className="chip active" style={{ cursor: 'default' }}>
-                        <Icon name={t?.type === 'drone' ? 'drone' : t?.type === 'boat' ? 'boat' : t?.type === 'safety' ? 'shield' : 'user'} size={11}/>
-                        {t?.code || id}
-                        <button onClick={() => setTaskForce(tf => ({ ...tf, assigned: tf.assigned.filter(a => a !== id) }))}
-                          style={{ background: 'transparent', border: 0, color: 'inherit', padding: 0, marginLeft: 2, display: 'flex', cursor: 'pointer' }}>
-                          <Icon name="x" size={10}/>
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-              <div style={{ padding: 10, background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-                <div className="eyebrow" style={{ marginBottom: 6 }}>ตรวจด่านความปลอดภัย</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  <SafetyGate status="passed" code="EOD ✓"/>
-                  <SafetyGate status="passed" code="LZ ✓"/>
-                  <SafetyGate status="failed" code="HOSPITAL ✗"/>
-                  <SafetyGate status="pending" code="ROUTE ?"/>
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 8, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                  <Icon name="incident" size={12}/>
-                  <span>HOSPITAL_GATE ถูกบล็อก · ต้องจัดเส้นทาง P1 ไปรามาธิบดี (Role 3) ก่อนส่ง</span>
-                </div>
-              </div>
-            </div>
-          </Panel>
-        </div>
-      </div>
-
-      <Panel title="ทะเบียนทรัพยากร · พร้อมใช้งาน" count={filteredTeams.length} actions={
-        <div style={{ display: 'flex', gap: 4 }}>
-          {['all','boat','medical','drone','truck','helicopter','safety'].map(t => (
-            <span key={t} className={'chip' + (filter === t ? ' active' : '')} onClick={() => setFilter(t)} style={{ textTransform: 'capitalize', fontSize: 11 }}>{t}</span>
-          ))}
-        </div>
-      } flush>
-        <table className="tbl">
-          <thead><tr><th>รหัส</th><th>ชื่อ</th><th>ขีดความสามารถ</th><th>สถานะ</th><th>ความพร้อม</th><th>ที่อยู่</th><th>หน่วย</th><th></th></tr></thead>
-          <tbody>
-            {filteredTeams.map((t: any) => (
-              <tr key={t.id} className={taskForce.assigned.includes(t.id) ? 'selected' : ''}>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-2)' }}>{t.id}</td>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Icon name={t.type === 'drone' ? 'drone' : t.type === 'boat' ? 'boat' : t.type === 'helicopter' ? 'helicopter' : t.type === 'truck' ? 'truck' : t.type === 'safety' ? 'shield' : 'user'} size={14} color="var(--text-3)"/>
-                    <span style={{ fontWeight: 500 }}>{t.code}</span>
-                  </div>
-                </td>
-                <td>{t.capability}</td>
-                <td><StatusBadge status={t.status} label={t.status.replace('_', ' ')}/></td>
-                <td><Readiness percent={t.readiness}/></td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{t.site}</td>
-                <td style={{ color: 'var(--text-3)' }}>{t.org}</td>
-                <td>
-                  {taskForce.assigned.includes(t.id) ? (
-                    <button className="btn sm ghost" onClick={() => setTaskForce(tf => ({ ...tf, assigned: tf.assigned.filter(a => a !== t.id) }))}>นำออก</button>
-                  ) : (
-                    <button className="btn sm" onClick={() => setTaskForce(tf => ({ ...tf, assigned: [...tf.assigned, t.id] }))}><Icon name="plus" size={11}/> เพิ่ม</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
-    </div>
-  );
-}
+export { CopDispatch } from './cop-dispatch';
 
 export function FacilityCoord({ data, fireEvent }: { data: Data; fireEvent: FireEvent }) {
   const [facilities, setFacilities] = useState(data.facilities);

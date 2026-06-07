@@ -1,27 +1,18 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getDrillCOPData } from '@/lib/supabase/queries'
+import { resolveUserContext } from '@/services/context.service'
 import { Bell, Search, Plus, Map, Edit2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import COPMapWrapper from '@/components/operation/cop-map-wrapper'
+import { CopSafetyGates } from './cop-safety-gates'
+import { RealtimeCOPEvents } from './realtime-cop-events'
 import type { Metadata } from 'next'
 import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 
 export const metadata: Metadata = { title: 'COP — ภาพรวมสั่งการ' }
 
-const gateStatusColor: Record<string, string> = {
-  passed: 'bg-green-100 text-green-700 border-green-200',
-  pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  failed: 'bg-red-100 text-red-700 border-red-200',
-  waived: 'bg-gray-100 text-gray-600 border-gray-200',
-}
-const gateStatusLabel: Record<string, string> = {
-  passed: 'PASSED',
-  pending: 'PENDING',
-  failed: 'FAILED',
-  waived: 'WAIVED',
-}
 const drillStatusLabel: Record<string, string> = {
   draft: 'ร่าง',
   planned: 'วางแผนแล้ว',
@@ -33,9 +24,15 @@ const drillStatusLabel: Record<string, string> = {
 
 export default async function COPPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+
+  const ctxResult = await resolveUserContext()
+  if (!ctxResult.ok) redirect('/login')
+  const ctx = ctxResult.data
+
   const data = await getDrillCOPData(id)
   if (!data) notFound()
 
+  const canManage = ctx.canManage
   const { drill, events, stats, gates } = data
 
   const elapsedText = drill.start_date
@@ -229,49 +226,15 @@ export default async function COPPage({ params }: { params: Promise<{ id: string
                 ด่านความปลอดภัย
                 <span className="ml-1 text-gray-400">{gates.length}</span>
               </h3>
-              <button className="text-xs text-blue-600 hover:underline">จัดการ</button>
             </div>
-            {gates.length === 0 ? (
-              <p className="text-xs text-gray-400">ไม่มี Safety Gate Rules</p>
-            ) : (
-              <div className="space-y-2">
-                {gates.map((gate) => (
-                  <div key={gate.id} className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0 mr-2">
-                      <div className="text-xs font-medium text-gray-700 truncate">{gate.name}</div>
-                      <div className="text-xs text-gray-400 capitalize">{gate.condition_type}</div>
-                    </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${gateStatusColor[gate.status] ?? gateStatusColor.pending}`}>
-                      {gateStatusLabel[gate.status] ?? 'PENDING'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <CopSafetyGates drillId={id} gates={gates} canManage={canManage} />
           </div>
 
-          {/* Recent Events */}
-          {events.length > 0 && (
-            <div className="p-4">
-              <h3 className="text-xs font-semibold text-gray-700 mb-3">Events ล่าสุด</h3>
-              <div className="space-y-2">
-                {events.slice(0, 6).map((event) => (
-                  <div key={event.id} className="flex items-start gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                      event.severity === 'critical' ? 'bg-red-500' :
-                      event.severity === 'warning' ? 'bg-yellow-500' : 'bg-blue-400'
-                    }`} />
-                    <div className="min-w-0">
-                      <div className="text-xs text-gray-700 leading-tight line-clamp-2">{event.title}</div>
-                      <div className="text-xs text-gray-400">
-                        {format(new Date(event.timestamp), 'HH:mm', { locale: th })}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Recent Events — live */}
+          <div className="p-4">
+            <h3 className="text-xs font-semibold text-gray-700 mb-3">Events ล่าสุด</h3>
+            <RealtimeCOPEvents drillId={id} initialEvents={events} />
+          </div>
         </div>
       </div>
     </div>
