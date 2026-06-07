@@ -278,3 +278,58 @@ export const updateDrillStatusSchema = z.object({
   status: drillStatus,
 })
 export type UpdateDrillStatusInput = z.infer<typeof updateDrillStatusSchema>
+
+// ── Object Registry actions ──────────────────────────────────────────────────
+
+const objectType = z.enum([
+  'ambulance','boat','HEMS','UAV','ALS_unit','BLS_unit',
+  'personnel','unit','equipment','vehicle','other',
+])
+const objectStatus = z.enum([
+  'available','en_route','on_scene','standby',
+  'unavailable','maintenance','demobilized',
+])
+
+export const createObjectSchema = z.object({
+  object_code:   z.string().min(1).max(50).toUpperCase(),
+  name:          z.string().min(1).max(100),
+  type:          objectType,
+  owner:         z.string().max(100).optional(),
+  home_location: z.string().max(100).optional(),
+  notes:         z.string().max(500).optional(),
+})
+export type CreateObjectInput = z.infer<typeof createObjectSchema>
+
+export const updateObjectReadinessSchema = z.object({
+  object_id: z.string().uuid(),
+  readiness: z.coerce.number().int().min(0).max(100),
+  notes:     z.string().max(500).optional(),
+})
+export type UpdateObjectReadinessInput = z.infer<typeof updateObjectReadinessSchema>
+
+export const changeObjectStatusSchema = z.object({
+  object_id: z.string().uuid(),
+  status:    objectStatus,
+  notes:     z.string().max(500).optional(),
+})
+export type ChangeObjectStatusInput = z.infer<typeof changeObjectStatusSchema>
+
+export const assignObjectCapabilitySchema = z.object({
+  object_id:       z.string().uuid(),
+  capability_code: z.string().min(1),
+  action:          z.enum(['add', 'remove']).default('add'),
+})
+export type AssignObjectCapabilityInput = z.infer<typeof assignObjectCapabilitySchema>
+
+export const attachObjectStandardSchema = z.object({
+  object_id:   z.string().uuid(),
+  standard_id: z.string().uuid(),
+})
+export type AttachObjectStandardInput = z.infer<typeof attachObjectStandardSchema>
+
+export const markObjectMaintenanceSchema = z.object({
+  object_id:       z.string().uuid(),
+  notes:           z.string().max(500).optional(),
+  expected_return: z.string().optional(),
+})
+export type MarkObjectMaintenanceInput = z.infer<typeof markObjectMaintenanceSchema>

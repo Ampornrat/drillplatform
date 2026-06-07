@@ -642,13 +642,18 @@ export type Database = {
           session_id: string | null
           object_code: string
           name: string
-          type: 'ambulance' | 'boat' | 'HEMS' | 'UAV' | 'ALS_unit' | 'BLS_unit' | 'other'
+          type: 'ambulance' | 'boat' | 'HEMS' | 'UAV' | 'ALS_unit' | 'BLS_unit' | 'personnel' | 'unit' | 'equipment' | 'vehicle' | 'other'
           capability: string[]
-          status: 'available' | 'en_route' | 'on_scene' | 'standby' | 'unavailable'
+          limitations: string[]
+          status: 'available' | 'en_route' | 'on_scene' | 'standby' | 'unavailable' | 'maintenance' | 'demobilized'
           readiness: number
+          owner: string | null
+          organization_id: string | null
+          home_location: string | null
           assigned_patient_id: string | null
           lat: number | null
           lng: number | null
+          notes: string | null
           meta: Json
           created_at: string
           updated_at: string
@@ -659,18 +664,103 @@ export type Database = {
           session_id?: string | null
           object_code: string
           name: string
-          type: 'ambulance' | 'boat' | 'HEMS' | 'UAV' | 'ALS_unit' | 'BLS_unit' | 'other'
+          type: 'ambulance' | 'boat' | 'HEMS' | 'UAV' | 'ALS_unit' | 'BLS_unit' | 'personnel' | 'unit' | 'equipment' | 'vehicle' | 'other'
           capability?: string[]
-          status?: 'available' | 'en_route' | 'on_scene' | 'standby' | 'unavailable'
+          limitations?: string[]
+          status?: 'available' | 'en_route' | 'on_scene' | 'standby' | 'unavailable' | 'maintenance' | 'demobilized'
           readiness?: number
+          owner?: string | null
+          organization_id?: string | null
+          home_location?: string | null
           assigned_patient_id?: string | null
           lat?: number | null
           lng?: number | null
+          notes?: string | null
           meta?: Json
           created_at?: string
           updated_at?: string
         }
         Update: Partial<Omit<Database['public']['Tables']['object_registry']['Insert'], 'object_code'>>
+        Relationships: []
+      }
+      lifecycle_events: {
+        Row: {
+          id: string
+          object_id: string
+          event_type: string
+          from_value: string | null
+          to_value: string | null
+          actor_id: string | null
+          actor_name: string | null
+          notes: string | null
+          meta: Json
+          occurred_at: string
+        }
+        Insert: {
+          id?: string
+          object_id: string
+          event_type: string
+          from_value?: string | null
+          to_value?: string | null
+          actor_id?: string | null
+          actor_name?: string | null
+          notes?: string | null
+          meta?: Json
+          occurred_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['lifecycle_events']['Insert'], 'object_id'>>
+        Relationships: []
+      }
+      capability_registry: {
+        Row: {
+          id: string
+          code: string
+          name: string
+          category: string | null
+          description: string | null
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          name: string
+          category?: string | null
+          description?: string | null
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['capability_registry']['Insert'], 'code'>>
+        Relationships: []
+      }
+      platform_events: {
+        Row: {
+          id: string
+          event_type: string
+          source_type: string | null
+          source_id: string | null
+          severity: 'info' | 'warning' | 'critical' | 'drill'
+          title: string
+          description: string | null
+          actor_id: string | null
+          drill_id: string | null
+          meta: Json
+          occurred_at: string
+        }
+        Insert: {
+          id?: string
+          event_type: string
+          source_type?: string | null
+          source_id?: string | null
+          severity?: 'info' | 'warning' | 'critical' | 'drill'
+          title: string
+          description?: string | null
+          actor_id?: string | null
+          drill_id?: string | null
+          meta?: Json
+          occurred_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['platform_events']['Insert'], 'event_type'>>
         Relationships: []
       }
       patient_movements: {
