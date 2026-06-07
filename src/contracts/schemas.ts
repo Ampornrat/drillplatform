@@ -392,6 +392,63 @@ export const lockObjectivesSchema = z.object({
 export type LockObjectivesInput = z.infer<typeof lockObjectivesSchema>
 
 /** Assign a controller or evaluator to a drill. */
+// ── Control Room ─────────────────────────────────────────────────────────────
+
+/** Update sim clock status (start / pause / resume / complete). */
+export const updateSimClockSchema = z.object({
+  scenario_id:      z.string().uuid(),
+  status:           z.enum(['standby','live','paused','safety_pause','completed']),
+  elapsed_seconds:  z.coerce.number().int().min(0).optional(),
+  speed_multiplier: z.coerce.number().min(0.1).max(10).optional(),
+  notes:            z.string().max(500).optional(),
+})
+export type UpdateSimClockInput = z.infer<typeof updateSimClockSchema>
+
+/** Push an inject from the MSEL queue to field teams. */
+export const pushScenarioInjectSchema = z.object({
+  inject_id:   z.string().uuid(),
+  scenario_id: z.string().uuid(),
+  notes:       z.string().max(500).optional(),
+})
+export type PushScenarioInjectInput = z.infer<typeof pushScenarioInjectSchema>
+
+/** Acknowledge receipt of a delivered inject. */
+export const acknowledgeInjectSchema = z.object({
+  delivery_id: z.string().uuid(),
+  notes:       z.string().max(500).optional(),
+})
+export type AcknowledgeInjectInput = z.infer<typeof acknowledgeInjectSchema>
+
+/** Change the operational state of a resource (object or facility). */
+export const changeResourceStateSchema = z.object({
+  resource_type: z.enum(['object','facility']),
+  resource_id:   z.string().uuid(),
+  status:        z.string().min(1),
+  scenario_id:   z.string().uuid(),
+  notes:         z.string().max(500).optional(),
+})
+export type ChangeResourceStateInput = z.infer<typeof changeResourceStateSchema>
+
+/** Pause the exercise (normal pause or safety pause). */
+export const pauseExerciseSchema = z.object({
+  scenario_id:      z.string().uuid(),
+  pause_type:       z.enum(['pause','safety_pause']),
+  reason:           z.string().max(500).optional(),
+  elapsed_seconds:  z.coerce.number().int().min(0),
+})
+export type PauseExerciseInput = z.infer<typeof pauseExerciseSchema>
+
+/** Create an evaluator observation/flag. */
+export const createEvaluatorFlagSchema = z.object({
+  scenario_id:         z.string().uuid(),
+  category:            z.enum(['observation','strength','weakness','safety_concern','critical_incident']).default('observation'),
+  title:               z.string().min(1,'ระบุชื่อ flag').max(200),
+  description:         z.string().max(1000).optional(),
+  severity:            z.enum(['info','warning','critical']).default('info'),
+  elapsed_seconds_at:  z.coerce.number().int().min(0).optional(),
+})
+export type CreateEvaluatorFlagInput = z.infer<typeof createEvaluatorFlagSchema>
+
 export const assignControllerSchema = z.object({
   drill_id:        z.string().uuid(),
   user_id:         z.string().uuid(),

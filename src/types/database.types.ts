@@ -1155,6 +1155,100 @@ export type Database = {
         Update: Partial<Omit<Database['public']['Tables']['controllers_evaluators']['Insert'], 'drill_id' | 'user_id'>>
         Relationships: []
       }
+      sim_clock_state: {
+        Row: {
+          id: string
+          scenario_id: string
+          status: 'standby' | 'live' | 'paused' | 'safety_pause' | 'completed'
+          elapsed_seconds: number
+          speed_multiplier: number
+          started_at: string | null
+          paused_at: string | null
+          last_tick_at: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          scenario_id: string
+          status?: 'standby' | 'live' | 'paused' | 'safety_pause' | 'completed'
+          elapsed_seconds?: number
+          speed_multiplier?: number
+          started_at?: string | null
+          paused_at?: string | null
+          last_tick_at?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['sim_clock_state']['Insert'], 'scenario_id'>>
+        Relationships: []
+      }
+      inject_deliveries: {
+        Row: {
+          id: string
+          inject_id: string
+          scenario_id: string
+          delivered_to_role: string | null
+          delivered_to_team: string | null
+          delivered_to_user: string | null
+          delivered_at: string
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          inject_id: string
+          scenario_id: string
+          delivered_to_role?: string | null
+          delivered_to_team?: string | null
+          delivered_to_user?: string | null
+          delivered_at?: string
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['inject_deliveries']['Insert'], 'inject_id' | 'scenario_id'>>
+        Relationships: []
+      }
+      evaluator_flags: {
+        Row: {
+          id: string
+          scenario_id: string
+          flagged_by: string
+          flagged_at: string
+          category: 'observation' | 'strength' | 'weakness' | 'safety_concern' | 'critical_incident'
+          title: string
+          description: string | null
+          severity: 'info' | 'warning' | 'critical'
+          elapsed_seconds_at: number | null
+          is_resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          scenario_id: string
+          flagged_by: string
+          flagged_at?: string
+          category?: 'observation' | 'strength' | 'weakness' | 'safety_concern' | 'critical_incident'
+          title: string
+          description?: string | null
+          severity?: 'info' | 'warning' | 'critical'
+          elapsed_seconds_at?: number | null
+          is_resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          created_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['evaluator_flags']['Insert'], 'scenario_id' | 'flagged_by'>>
+        Relationships: []
+      }
     }
     Views: {
       v_facility_latest_status: {

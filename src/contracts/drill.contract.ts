@@ -75,6 +75,22 @@ export interface MSELInject {
 
 // ── Sim clock ────────────────────────────────────────────────────────────────
 
+export type SimClockStatus = 'standby' | 'live' | 'paused' | 'safety_pause' | 'completed'
+
+/** Persisted simulation clock row (sim_clock_state table). */
+export interface SimClockRow {
+  id: string
+  scenario_id: string
+  status: SimClockStatus
+  elapsed_seconds: number
+  speed_multiplier: number
+  started_at: string | null
+  paused_at: string | null
+  last_tick_at: string | null
+  notes: string | null
+  updated_at: string
+}
+
 /** In-memory simulation clock state (not persisted to a dedicated table). */
 export interface SimClockState {
   drill_id: string
@@ -83,6 +99,65 @@ export interface SimClockState {
   started_at: string | null
   paused_at: string | null
   speed_multiplier: number
+}
+
+// ── Inject deliveries ─────────────────────────────────────────────────────────
+
+export interface InjectDelivery {
+  id: string
+  inject_id: string
+  scenario_id: string
+  delivered_to_role: string | null
+  delivered_to_team: string | null
+  delivered_to_user: string | null
+  delivered_at: string
+  acknowledged_at: string | null
+  acknowledged_by: string | null
+  notes: string | null
+  inject_code: string
+  inject_title: string
+  inject_severity: 'info' | 'warning' | 'critical'
+}
+
+// ── Evaluator flags ───────────────────────────────────────────────────────────
+
+export type EvaluatorFlagCategory =
+  | 'observation'
+  | 'strength'
+  | 'weakness'
+  | 'safety_concern'
+  | 'critical_incident'
+
+export interface EvaluatorFlag {
+  id: string
+  scenario_id: string
+  flagged_by: string
+  flagged_by_name: string | null
+  flagged_at: string
+  category: EvaluatorFlagCategory
+  title: string
+  description: string | null
+  severity: 'info' | 'warning' | 'critical'
+  elapsed_seconds_at: number | null
+  is_resolved: boolean
+  resolved_at: string | null
+}
+
+// ── Control room assembled data ───────────────────────────────────────────────
+
+export interface ControlRoomData {
+  scenario: ScenarioInstance
+  clock: SimClockRow
+  injects: MselInjectRow[]
+  deliveries: InjectDelivery[]
+  flags: EvaluatorFlag[]
+  recentEvents: Array<{
+    id: string
+    event_type: string
+    title: string
+    severity: string
+    occurred_at: string
+  }>
 }
 
 // ── Scenario templates ────────────────────────────────────────────────────────
