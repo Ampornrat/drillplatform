@@ -333,3 +333,70 @@ export const markObjectMaintenanceSchema = z.object({
   expected_return: z.string().optional(),
 })
 export type MarkObjectMaintenanceInput = z.infer<typeof markObjectMaintenanceSchema>
+
+// ── Scenario Builder ─────────────────────────────────────────────────────────
+
+/** Create a scenario instance from a template (Step 1+2 of wizard). */
+export const createScenarioFromTemplateSchema = z.object({
+  drill_id:             z.string().uuid('ต้องระบุ Drill'),
+  template_id:          z.string().uuid('ต้องเลือก Template'),
+  title:                z.string().min(1, 'ระบุชื่อ Scenario').max(200),
+  description:          z.string().max(1000).optional(),
+  start_offset_minutes: z.coerce.number().int().min(0).default(0),
+  duration_minutes:     z.coerce.number().int().min(1).max(1440).default(90),
+  objectives:           z.string().optional(),
+})
+export type CreateScenarioFromTemplateInput = z.infer<typeof createScenarioFromTemplateSchema>
+
+/** Update scope/objectives of an existing scenario instance. */
+export const updateScenarioScopeSchema = z.object({
+  scenario_id:      z.string().uuid(),
+  title:            z.string().min(1).max(200).optional(),
+  description:      z.string().max(1000).optional(),
+  objectives:       z.string().optional(),
+  duration_minutes: z.coerce.number().int().min(1).max(1440).optional(),
+})
+export type UpdateScenarioScopeInput = z.infer<typeof updateScenarioScopeSchema>
+
+/** Generate casualty instances for a scenario. */
+export const generateCasualtiesSchema = z.object({
+  scenario_id: z.string().uuid(),
+  count:       z.coerce.number().int().min(1).max(200).default(20),
+  p1_pct:      z.coerce.number().int().min(0).max(100).default(20),
+  p2_pct:      z.coerce.number().int().min(0).max(100).default(35),
+  p3_pct:      z.coerce.number().int().min(0).max(100).default(35),
+  black_pct:   z.coerce.number().int().min(0).max(100).default(10),
+}).refine(d => d.p1_pct + d.p2_pct + d.p3_pct + d.black_pct === 100, {
+  message: 'ผลรวมของสัดส่วนต้องเท่ากับ 100',
+})
+export type GenerateCasualtiesInput = z.infer<typeof generateCasualtiesSchema>
+
+/** Add a MSEL inject to a scenario. */
+export const createMselInjectSchema = z.object({
+  scenario_id:     z.string().uuid(),
+  inject_code:     z.string().min(1, 'ระบุรหัส inject').max(50).toUpperCase(),
+  title:           z.string().min(1, 'ระบุชื่อ inject').max(200),
+  description:     z.string().max(1000).optional(),
+  inject_type:     z.string().min(1, 'ระบุประเภท').default('event'),
+  severity:        z.enum(['info','warning','critical']).default('info'),
+  target_team:     z.string().max(100).optional(),
+  expected_action: z.string().max(500).optional(),
+  offset_minutes:  z.coerce.number().int().min(0).default(0),
+})
+export type CreateMselInjectInput = z.infer<typeof createMselInjectSchema>
+
+/** Lock scenario objectives — no more edits after this. */
+export const lockObjectivesSchema = z.object({
+  scenario_id: z.string().uuid(),
+})
+export type LockObjectivesInput = z.infer<typeof lockObjectivesSchema>
+
+/** Assign a controller or evaluator to a drill. */
+export const assignControllerSchema = z.object({
+  drill_id:        z.string().uuid(),
+  user_id:         z.string().uuid(),
+  assignment_type: z.enum(['controller','evaluator','both']).default('controller'),
+  assigned_team:   z.string().max(100).optional(),
+  notes:           z.string().max(500).optional(),
+})
+export type AssignControllerInput = z.infer<typeof assignControllerSchema>

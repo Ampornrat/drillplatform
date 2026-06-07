@@ -5,8 +5,8 @@ import { usePathname } from 'next/navigation'
 import {
   Shield, LayoutDashboard, Users, Building2, BookOpen, Box,
   ClipboardList, AlertTriangle, ScrollText, FileBarChart2,
-  Radio, Eye, LogOut, Map, FlaskConical, Stethoscope,
-  Truck, BarChart3, Settings, ChevronRight,
+  Radio, Eye, LogOut, Map, FlaskConical,
+  Truck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -40,6 +40,10 @@ function buildNavGroups(ctx: AppCtx): NavGroup[] {
     ? { href: `/operation/${activeIncidentId}/cop`, label: 'COP', icon: Map }
     : null
 
+  const drillDashItem: NavItem | null = activeIncidentId
+    ? { href: `/drill/${activeIncidentId}/dashboard`, label: 'Drill Dashboard', icon: FlaskConical }
+    : null
+
   switch (role) {
     case 'admin':
       return [
@@ -61,6 +65,7 @@ function buildNavGroups(ctx: AppCtx): NavGroup[] {
             { href: '/planner/drills', label: 'จัดการ Drills / Ops', icon: Radio },
             { href: '/observer', label: 'สังเกตการณ์', icon: Eye },
             ...(copItem ? [copItem] : []),
+            ...(drillDashItem ? [drillDashItem] : []),
           ],
         },
         {
@@ -81,6 +86,7 @@ function buildNavGroups(ctx: AppCtx): NavGroup[] {
           items: [
             { href: '/planner/drills', label: 'Drills / Operations', icon: Radio },
             ...(copItem ? [copItem] : []),
+            ...(drillDashItem ? [drillDashItem] : []),
             { href: '/core/event-log', label: 'Event Log', icon: ScrollText },
             { href: '/observer', label: 'สังเกตการณ์', icon: Eye },
           ],

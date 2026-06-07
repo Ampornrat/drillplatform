@@ -84,3 +84,138 @@ export interface SimClockState {
   paused_at: string | null
   speed_multiplier: number
 }
+
+// ── Scenario templates ────────────────────────────────────────────────────────
+
+export interface ScenarioTemplate {
+  id: string
+  code: string
+  title: string
+  description: string | null
+  scenario_type: string
+  default_duration_minutes: number
+  default_objectives: string[]
+  default_sites: Array<{ site_code: string; site_name: string; role: string }>
+  archetype_distribution: Record<string, number>
+}
+
+// ── Scenario instances ────────────────────────────────────────────────────────
+
+export interface ScenarioSiteRow {
+  id: string
+  scenario_id: string
+  site_code: string
+  site_name: string
+  site_type: string
+  role: string | null
+  capacity: number | null
+}
+
+export interface ScenarioInstance {
+  id: string
+  drill_id: string
+  template_id: string | null
+  title: string
+  description: string | null
+  scenario_type: string
+  status: 'draft' | 'ready' | 'active' | 'completed' | 'cancelled'
+  objectives: string[]
+  objectives_locked: boolean
+  start_offset_minutes: number
+  duration_minutes: number
+  created_by: string | null
+  created_at: string
+  sites: ScenarioSiteRow[]
+  inject_count: number
+  casualty_count: number
+}
+
+// ── Casualties ────────────────────────────────────────────────────────────────
+
+export interface CasualtyArchetype {
+  id: string
+  code: string
+  name: string
+  triage_level: 'P1' | 'P2' | 'P3' | 'BLACK'
+  mechanism: string | null
+  injuries: string[]
+  expected_treatment: string | null
+  difficulty: 'easy' | 'medium' | 'hard'
+}
+
+export interface CasualtyInstance {
+  id: string
+  scenario_id: string
+  archetype_id: string | null
+  patient_code: string
+  triage_level: 'P1' | 'P2' | 'P3' | 'BLACK' | null
+  name_alias: string | null
+  age: number | null
+  gender: string | null
+  mechanism: string | null
+  injuries: string[]
+  initial_site_code: string | null
+}
+
+// ── MSEL injects (scenario-level) ────────────────────────────────────────────
+
+export interface MselInjectRow {
+  id: string
+  scenario_id: string
+  inject_code: string
+  title: string
+  description: string | null
+  inject_type: string
+  severity: 'info' | 'warning' | 'critical'
+  target_team: string | null
+  expected_action: string | null
+  offset_minutes: number
+  status: 'queued' | 'pushed' | 'acknowledged' | 'completed' | 'skipped'
+  pushed_at: string | null
+}
+
+// ── Exercise teams ────────────────────────────────────────────────────────────
+
+export interface ExerciseTeam {
+  id: string
+  drill_id: string
+  team_code: string
+  team_name: string
+  role: string
+  leader_id: string | null
+  member_count: number
+  organization: string | null
+}
+
+// ── Controllers / Evaluators ──────────────────────────────────────────────────
+
+export interface ControllerEvaluator {
+  id: string
+  drill_id: string
+  user_id: string
+  user_name: string | null
+  assignment_type: 'controller' | 'evaluator' | 'both'
+  assigned_team: string | null
+  notes: string | null
+}
+
+// ── Dashboard summary ─────────────────────────────────────────────────────────
+
+export interface DrillDashboardSummary {
+  drill_id: string
+  drill_title: string
+  drill_status: string
+  scenario_count: number
+  active_scenario_id: string | null
+  active_scenario_title: string | null
+  total_casualties: number
+  p1_count: number
+  p2_count: number
+  p3_count: number
+  black_count: number
+  inject_total: number
+  inject_pushed: number
+  inject_pending: number
+  team_count: number
+  participant_count: number
+}

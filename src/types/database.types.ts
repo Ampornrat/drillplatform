@@ -913,6 +913,248 @@ export type Database = {
         Update: Partial<Omit<Database['public']['Tables']['iodp_safety_gates']['Insert'], 'session_id' | 'gate_code'>>
         Relationships: []
       }
+      scenario_templates: {
+        Row: {
+          id: string
+          code: string
+          title: string
+          description: string | null
+          scenario_type: string
+          default_duration_minutes: number
+          default_objectives: string[]
+          default_sites: Json
+          archetype_distribution: Json
+          meta: Json
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          title: string
+          description?: string | null
+          scenario_type?: string
+          default_duration_minutes?: number
+          default_objectives?: string[]
+          default_sites?: Json
+          archetype_distribution?: Json
+          meta?: Json
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['scenario_templates']['Insert']>
+        Relationships: []
+      }
+      scenario_instances: {
+        Row: {
+          id: string
+          drill_id: string
+          template_id: string | null
+          title: string
+          description: string | null
+          scenario_type: string
+          status: 'draft' | 'ready' | 'active' | 'completed' | 'cancelled'
+          objectives: string[]
+          objectives_locked: boolean
+          start_offset_minutes: number
+          duration_minutes: number
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          drill_id: string
+          template_id?: string | null
+          title: string
+          description?: string | null
+          scenario_type?: string
+          status?: 'draft' | 'ready' | 'active' | 'completed' | 'cancelled'
+          objectives?: string[]
+          objectives_locked?: boolean
+          start_offset_minutes?: number
+          duration_minutes?: number
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['scenario_instances']['Insert'], 'drill_id'>>
+        Relationships: []
+      }
+      scenario_sites: {
+        Row: {
+          id: string
+          scenario_id: string
+          site_code: string
+          site_name: string
+          site_type: string
+          role: string | null
+          capacity: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          scenario_id: string
+          site_code: string
+          site_name: string
+          site_type?: string
+          role?: string | null
+          capacity?: number | null
+          created_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['scenario_sites']['Insert'], 'scenario_id'>>
+        Relationships: []
+      }
+      msel_injects: {
+        Row: {
+          id: string
+          scenario_id: string
+          inject_code: string
+          title: string
+          description: string | null
+          inject_type: string
+          severity: 'info' | 'warning' | 'critical'
+          target_team: string | null
+          expected_action: string | null
+          offset_minutes: number
+          status: 'queued' | 'pushed' | 'acknowledged' | 'completed' | 'skipped'
+          pushed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          scenario_id: string
+          inject_code: string
+          title: string
+          description?: string | null
+          inject_type?: string
+          severity?: 'info' | 'warning' | 'critical'
+          target_team?: string | null
+          expected_action?: string | null
+          offset_minutes?: number
+          status?: 'queued' | 'pushed' | 'acknowledged' | 'completed' | 'skipped'
+          pushed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['msel_injects']['Insert'], 'scenario_id'>>
+        Relationships: []
+      }
+      casualty_archetypes: {
+        Row: {
+          id: string
+          code: string
+          name: string
+          triage_level: 'P1' | 'P2' | 'P3' | 'BLACK'
+          mechanism: string | null
+          injuries: string[]
+          expected_treatment: string | null
+          difficulty: 'easy' | 'medium' | 'hard'
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          name: string
+          triage_level: 'P1' | 'P2' | 'P3' | 'BLACK'
+          mechanism?: string | null
+          injuries?: string[]
+          expected_treatment?: string | null
+          difficulty?: 'easy' | 'medium' | 'hard'
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['casualty_archetypes']['Insert']>
+        Relationships: []
+      }
+      casualty_instances: {
+        Row: {
+          id: string
+          scenario_id: string
+          archetype_id: string | null
+          patient_code: string
+          triage_level: 'P1' | 'P2' | 'P3' | 'BLACK' | null
+          name_alias: string | null
+          age: number | null
+          gender: string | null
+          mechanism: string | null
+          injuries: string[]
+          initial_site_code: string | null
+          meta: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          scenario_id: string
+          archetype_id?: string | null
+          patient_code: string
+          triage_level?: 'P1' | 'P2' | 'P3' | 'BLACK' | null
+          name_alias?: string | null
+          age?: number | null
+          gender?: string | null
+          mechanism?: string | null
+          injuries?: string[]
+          initial_site_code?: string | null
+          meta?: Json
+          created_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['casualty_instances']['Insert'], 'scenario_id'>>
+        Relationships: []
+      }
+      exercise_teams: {
+        Row: {
+          id: string
+          drill_id: string
+          team_code: string
+          team_name: string
+          role: string
+          leader_id: string | null
+          member_count: number
+          organization: string | null
+          meta: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          drill_id: string
+          team_code: string
+          team_name: string
+          role?: string
+          leader_id?: string | null
+          member_count?: number
+          organization?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['exercise_teams']['Insert'], 'drill_id' | 'team_code'>>
+        Relationships: []
+      }
+      controllers_evaluators: {
+        Row: {
+          id: string
+          drill_id: string
+          user_id: string
+          assignment_type: 'controller' | 'evaluator' | 'both'
+          assigned_team: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          drill_id: string
+          user_id: string
+          assignment_type?: 'controller' | 'evaluator' | 'both'
+          assigned_team?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['controllers_evaluators']['Insert'], 'drill_id' | 'user_id'>>
+        Relationships: []
+      }
     }
     Views: {
       v_facility_latest_status: {
@@ -963,6 +1205,27 @@ export type Database = {
           departed_at: string | null
           created_at: string
           updated_at: string
+        }
+        Relationships: []
+      }
+      v_drill_dashboard_summary: {
+        Row: {
+          drill_id: string
+          drill_title: string
+          drill_status: string
+          scenario_count: number
+          active_scenario_id: string | null
+          active_scenario_title: string | null
+          total_casualties: number
+          p1_count: number
+          p2_count: number
+          p3_count: number
+          black_count: number
+          inject_total: number
+          inject_pushed: number
+          inject_pending: number
+          team_count: number
+          participant_count: number
         }
         Relationships: []
       }
