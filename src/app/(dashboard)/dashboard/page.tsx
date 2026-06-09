@@ -36,7 +36,7 @@ export default async function DashboardPage() {
   ])
 
   const recentDrills = drillsResult.ok ? drillsResult.data : []
-  const recentEvents = eventsResult.ok ? eventsResult.data : []
+  const recentEvents = eventsResult.ok ? eventsResult.data.items : []
   const standardsCount = standardsResult.ok ? standardsResult.data.length : 0
 
   const roleLabel: Record<UserRole, string> = {

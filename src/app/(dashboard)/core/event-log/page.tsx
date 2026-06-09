@@ -21,7 +21,7 @@ export default async function EventLogPage() {
     getEvents({ limit: 100 }),
     getDrillsList({ status: ['planned', 'active', 'paused'] }),
   ])
-  const events = eventsResult.ok ? eventsResult.data : []
+  const events = eventsResult.ok ? eventsResult.data.items : []
   const drills = drillsResult.ok ? drillsResult.data : []
 
   const criticalCount = events.filter(e => e.severity === 'critical').length

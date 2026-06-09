@@ -18,7 +18,7 @@ export default async function ObserverPage() {
     getDrillsList({ status: ['planned', 'active', 'paused'] }),
   ])
   const activeDrills = activeDrillsResult.ok ? activeDrillsResult.data : []
-  const recentEvents = recentEventsResult.ok ? recentEventsResult.data : []
+  const recentEvents = recentEventsResult.ok ? recentEventsResult.data.items : []
   const allDrills = allDrillsResult.ok ? allDrillsResult.data : []
 
   return (
