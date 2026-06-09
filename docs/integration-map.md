@@ -1,7 +1,7 @@
 # Integration Map — Drill Platform
 
-> Generated: 2026-06-02  
-> Status key: **connected** = real Supabase, reads + writes work | **partial** = reads real, writes missing or some mock | **mock** = UI renders but data is hardcoded/demo | **missing** = Next.js page does not exist yet
+> Updated: 2026-06-09 (Prompt 19 — mock data cleared, DEMO_DATA fallbacks removed)  
+> Status key: **connected** = real Supabase, reads + writes work | **partial** = reads real, writes missing or some mock | **empty-state** = no mock fallback, shows empty state when DB has no data | **missing** = Next.js page does not exist yet
 
 ---
 

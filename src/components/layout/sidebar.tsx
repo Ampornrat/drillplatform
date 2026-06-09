@@ -6,7 +6,7 @@ import {
   Shield, LayoutDashboard, Users, Building2, BookOpen, Box,
   ClipboardList, AlertTriangle, ScrollText, FileBarChart2,
   Radio, Eye, LogOut, Map, FlaskConical,
-  Truck,
+  Truck, Smartphone, Target,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -84,6 +84,7 @@ function buildNavGroups(ctx: AppCtx): NavGroup[] {
         {
           title: 'ปฏิบัติการ',
           items: [
+            { href: '/field', label: 'Field Mobile', icon: Smartphone },
             { href: '/planner/drills', label: 'Drills / Operations', icon: Radio },
             ...(copItem ? [copItem] : []),
             ...(drillDashItem ? [drillDashItem] : []),
@@ -111,6 +112,7 @@ function buildNavGroups(ctx: AppCtx): NavGroup[] {
             { href: '/core/safety-gates', label: 'Safety Gates', icon: AlertTriangle },
             { href: '/core/event-log', label: 'Event Log', icon: ScrollText },
             { href: '/observer', label: 'สังเกตการณ์', icon: Eye },
+            ...(drillDashItem ? [drillDashItem] : []),
           ],
         },
         {
@@ -128,9 +130,11 @@ function buildNavGroups(ctx: AppCtx): NavGroup[] {
         {
           title: 'การประเมิน',
           items: [
+            { href: '/field', label: 'Field Mobile', icon: Smartphone },
             { href: '/observer', label: 'สังเกตการณ์', icon: Eye },
             { href: '/core/event-log', label: 'Event Log', icon: ScrollText },
             { href: '/core/aar', label: 'AAR / LMS', icon: FileBarChart2 },
+            ...(drillDashItem ? [drillDashItem] : []),
           ],
         },
         {
@@ -147,6 +151,7 @@ function buildNavGroups(ctx: AppCtx): NavGroup[] {
         {
           title: 'ปฏิบัติการสนาม',
           items: [
+            { href: '/field', label: 'Field Mobile', icon: Smartphone },
             { href: '/core/event-log', label: 'Event Log', icon: ScrollText },
             ...(copItem ? [copItem] : []),
           ],
@@ -166,6 +171,7 @@ function buildNavGroups(ctx: AppCtx): NavGroup[] {
         {
           title: 'โลจิสติกส์',
           items: [
+            { href: '/field', label: 'Field Mobile', icon: Smartphone },
             { href: '/core/event-log', label: 'Event Log', icon: ScrollText },
             { href: '/core/master-registry', label: 'Master Registry', icon: Truck },
           ],
@@ -198,6 +204,7 @@ function buildNavGroups(ctx: AppCtx): NavGroup[] {
         {
           title: 'ภารกิจ',
           items: [
+            { href: '/field', label: 'Field Mobile', icon: Smartphone },
             { href: '/participant', label: 'ภารกิจของฉัน', icon: ClipboardList },
             { href: '/core/standards', label: 'Standards', icon: BookOpen },
           ],

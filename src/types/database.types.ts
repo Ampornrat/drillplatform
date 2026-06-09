@@ -797,6 +797,8 @@ export type Database = {
           link: string | null
           read: boolean
           drill_id: string | null
+          action_code: string | null
+          scenario_id: string | null
           created_at: string
         }
         Insert: {
@@ -808,6 +810,8 @@ export type Database = {
           link?: string | null
           read?: boolean
           drill_id?: string | null
+          action_code?: string | null
+          scenario_id?: string | null
           created_at?: string
         }
         Update: Partial<Omit<Database['public']['Tables']['notifications']['Insert'], 'user_id'>>
@@ -1230,6 +1234,16 @@ export type Database = {
           resolved_at: string | null
           resolved_by: string | null
           created_at: string
+          // Scoring extension (migration 013)
+          metric_code: string | null
+          subject_ref: string | null
+          score: number | null
+          max_score: number | null
+          result: 'pass' | 'gap' | 'fail' | null
+          finding: string | null
+          evidence_event_ids: string[]
+          recommended_action: string | null
+          root_cause: string | null
         }
         Insert: {
           id?: string
@@ -1245,8 +1259,269 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: string | null
           created_at?: string
+          metric_code?: string | null
+          subject_ref?: string | null
+          score?: number | null
+          max_score?: number | null
+          result?: 'pass' | 'gap' | 'fail' | null
+          finding?: string | null
+          evidence_event_ids?: string[]
+          recommended_action?: string | null
+          root_cause?: string | null
         }
         Update: Partial<Omit<Database['public']['Tables']['evaluator_flags']['Insert'], 'scenario_id' | 'flagged_by'>>
+        Relationships: []
+      }
+      evaluation_scores: {
+        Row: {
+          id: string
+          drill_id: string
+          session_id: string | null
+          evaluator_id: string | null
+          metric_id: string
+          metric_name: string
+          category: string
+          score: number
+          max_score: number
+          notes: string | null
+          evaluated_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          drill_id: string
+          session_id?: string | null
+          evaluator_id?: string | null
+          metric_id: string
+          metric_name: string
+          category: string
+          score?: number
+          max_score?: number
+          notes?: string | null
+          evaluated_at?: string
+          created_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['evaluation_scores']['Insert'], 'drill_id'>>
+        Relationships: []
+      }
+      measurement_rules: {
+        Row: {
+          id: string
+          metric_code: string
+          metric_name: string
+          metric_name_th: string | null
+          category: string
+          description: string | null
+          max_score: number
+          pass_threshold: number
+          is_safety_critical: boolean
+          start_event_type: string | null
+          end_event_type: string | null
+          time_target_seconds: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          metric_code: string
+          metric_name: string
+          metric_name_th?: string | null
+          category: string
+          description?: string | null
+          max_score?: number
+          pass_threshold?: number
+          is_safety_critical?: boolean
+          start_event_type?: string | null
+          end_event_type?: string | null
+          time_target_seconds?: number | null
+          created_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['measurement_rules']['Insert'], 'metric_code'>>
+        Relationships: []
+      }
+      improvement_actions: {
+        Row: {
+          id: string
+          aar_report_id: string | null
+          finding_type: string | null
+          finding_code: string | null
+          category: 'strength' | 'area_for_improvement' | 'sustain' | 'improve'
+          description: string
+          recommendation: string | null
+          root_cause: string | null
+          recommended_track: string | null
+          priority: 'low' | 'medium' | 'high'
+          severity: 'info' | 'warning' | 'critical'
+          status: 'open' | 'in_progress' | 'resolved' | 'closed' | 'cancelled'
+          responsible_party: string | null
+          owner_id: string | null
+          due_date: string | null
+          completed_at: string | null
+          lms_course: string | null
+          lms_deadline: string | null
+          evidence_event_ids: string[]
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          aar_report_id?: string | null
+          finding_type?: string | null
+          finding_code?: string | null
+          category?: 'strength' | 'area_for_improvement' | 'sustain' | 'improve'
+          description: string
+          recommendation?: string | null
+          root_cause?: string | null
+          recommended_track?: string | null
+          priority?: 'low' | 'medium' | 'high'
+          severity?: 'info' | 'warning' | 'critical'
+          status?: 'open' | 'in_progress' | 'resolved' | 'closed' | 'cancelled'
+          responsible_party?: string | null
+          owner_id?: string | null
+          due_date?: string | null
+          completed_at?: string | null
+          lms_course?: string | null
+          lms_deadline?: string | null
+          evidence_event_ids?: string[]
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['improvement_actions']['Insert'], 'aar_report_id'>>
+        Relationships: []
+      }
+      lms_courses: {
+        Row: {
+          id: string
+          course_code: string
+          course_name: string
+          course_name_th: string | null
+          finding_type: string | null
+          description: string | null
+          duration_hours: number
+          provider: string
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          course_code: string
+          course_name: string
+          course_name_th?: string | null
+          finding_type?: string | null
+          description?: string | null
+          duration_hours?: number
+          provider?: string
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['lms_courses']['Insert'], 'course_code'>>
+        Relationships: []
+      }
+      lms_assignments: {
+        Row: {
+          id: string
+          finding_id: string | null
+          course_code: string
+          assignee_id: string | null
+          assigned_by: string | null
+          assigned_at: string
+          deadline: string | null
+          status: 'assigned' | 'in_progress' | 'completed' | 'expired' | 'cancelled'
+          completed_at: string | null
+          notes: string | null
+          drill_id: string | null
+        }
+        Insert: {
+          id?: string
+          finding_id?: string | null
+          course_code: string
+          assignee_id?: string | null
+          assigned_by?: string | null
+          assigned_at?: string
+          deadline?: string | null
+          status?: 'assigned' | 'in_progress' | 'completed' | 'expired' | 'cancelled'
+          completed_at?: string | null
+          notes?: string | null
+          drill_id?: string | null
+        }
+        Update: Partial<Omit<Database['public']['Tables']['lms_assignments']['Insert'], 'course_code'>>
+        Relationships: []
+      }
+      sop_updates: {
+        Row: {
+          id: string
+          drill_id: string | null
+          aar_report_id: string | null
+          finding_id: string | null
+          sop_code: string | null
+          title: string
+          description: string
+          change_type: 'create' | 'update' | 'retire' | 'review'
+          priority: 'low' | 'medium' | 'high' | 'critical'
+          status: 'proposed' | 'under_review' | 'approved' | 'rejected' | 'implemented'
+          proposed_by: string | null
+          proposed_at: string
+          approved_by: string | null
+          approved_at: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          drill_id?: string | null
+          aar_report_id?: string | null
+          finding_id?: string | null
+          sop_code?: string | null
+          title: string
+          description: string
+          change_type?: 'create' | 'update' | 'retire' | 'review'
+          priority?: 'low' | 'medium' | 'high' | 'critical'
+          status?: 'proposed' | 'under_review' | 'approved' | 'rejected' | 'implemented'
+          proposed_by?: string | null
+          proposed_at?: string
+          approved_by?: string | null
+          approved_at?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Database['public']['Tables']['sop_updates']['Insert'], 'drill_id'>>
+        Relationships: []
+      }
+      scenario_bank_updates: {
+        Row: {
+          id: string
+          drill_id: string | null
+          aar_report_id: string | null
+          template_id: string | null
+          title: string
+          summary: string | null
+          lessons_learned: string | null
+          difficulty_adj: 'easier' | 'same' | 'harder' | null
+          metric_data: Json
+          finding_codes: string[]
+          submitted_by: string | null
+          submitted_at: string
+          status: 'draft' | 'submitted' | 'merged' | 'rejected'
+        }
+        Insert: {
+          id?: string
+          drill_id?: string | null
+          aar_report_id?: string | null
+          template_id?: string | null
+          title: string
+          summary?: string | null
+          lessons_learned?: string | null
+          difficulty_adj?: 'easier' | 'same' | 'harder' | null
+          metric_data?: Json
+          finding_codes?: string[]
+          submitted_by?: string | null
+          submitted_at?: string
+          status?: 'draft' | 'submitted' | 'merged' | 'rejected'
+        }
+        Update: Partial<Omit<Database['public']['Tables']['scenario_bank_updates']['Insert'], 'drill_id'>>
         Relationships: []
       }
     }
@@ -1320,6 +1595,39 @@ export type Database = {
           inject_pending: number
           team_count: number
           participant_count: number
+        }
+        Relationships: []
+      }
+      v_team_performance_summary: {
+        Row: {
+          drill_id: string
+          drill_title: string
+          category: string
+          avg_score: number
+          avg_max_score: number
+          avg_pct: number
+          metric_count: number
+          evaluator_count: number
+          min_pct: number | null
+          max_pct: number | null
+        }
+        Relationships: []
+      }
+      v_safety_violations: {
+        Row: {
+          id: string
+          drill_id: string
+          rule_id: string
+          rule_code: string
+          title: string
+          description: string | null
+          category: string | null
+          severity: string
+          status: string
+          violation_notes: string | null
+          passed_at: string | null
+          created_at: string
+          drill_title: string
         }
         Relationships: []
       }
@@ -1411,6 +1719,26 @@ export type Database = {
         Returns: Json
       }
       submit_evaluation_score: {
+        Args: { payload: Json }
+        Returns: Json
+      }
+      create_improvement_action: {
+        Args: { payload: Json }
+        Returns: Json
+      }
+      close_improvement_action: {
+        Args: { payload: Json }
+        Returns: Json
+      }
+      propose_sop_update: {
+        Args: { payload: Json }
+        Returns: Json
+      }
+      mark_notification_read: {
+        Args: { payload: Json }
+        Returns: Json
+      }
+      mark_all_notifications_read: {
         Args: { payload: Json }
         Returns: Json
       }

@@ -25,6 +25,18 @@ export default async function DrillLayout({ children, params }: Props) {
   const drillResult = await getDrillDetail(drillId, ctxResult.data.userId, role)
   const drillTitle = drillResult.ok ? drillResult.data.title : 'Drill'
 
+  // Find active scenario for Evaluation link
+  const supabase = await (await import('@/lib/supabase/server')).createClient()
+  const { data: activeScenario } = await supabase
+    .from('scenario_instances')
+    .select('id')
+    .eq('drill_id', drillId)
+    .in('status', ['active', 'ready', 'completed'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+  const activeScenarioId = activeScenario?.id ?? null
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <aside className="w-56 shrink-0 h-screen bg-white border-r border-gray-200 flex flex-col">
@@ -44,7 +56,7 @@ export default async function DrillLayout({ children, params }: Props) {
           </div>
         </div>
 
-        <DrillSidebarNav drillId={drillId} drillTitle={drillTitle} userName={userName} />
+        <DrillSidebarNav drillId={drillId} drillTitle={drillTitle} userName={userName} activeScenarioId={activeScenarioId} />
 
         <div className="border-t border-gray-100 p-3">
           <p className="text-xs text-gray-400 px-2 truncate">{userName ?? 'ผู้ใช้งาน'}</p>

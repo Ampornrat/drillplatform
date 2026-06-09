@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import type { COPMarker } from './cop-map'
 
 const COPMap = dynamic(() => import('./cop-map'), {
   ssr: false,
@@ -11,6 +12,13 @@ const COPMap = dynamic(() => import('./cop-map'), {
   ),
 })
 
-export default function COPMapWrapper() {
-  return <COPMap />
+interface COPMapWrapperProps {
+  markers?: COPMarker[]
+  center?: { lat: number; lng: number }
+  zoom?: number
+  title?: string
+}
+
+export default function COPMapWrapper({ markers, center, zoom, title }: COPMapWrapperProps) {
+  return <COPMap markers={markers} center={center} zoom={zoom} title={title} />
 }

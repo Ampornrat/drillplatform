@@ -3,24 +3,43 @@ import { ok, fail, type ServiceResult } from '@/lib/result'
 import type { EventLogItem } from '@/contracts/common.contract'
 import type { DrillMode, EventSeverity } from '@/contracts/common.contract'
 
+const PAGE_SIZE = 50
+
+export interface EventPage {
+  items: EventLogItem[]
+  nextCursor: string | null
+  total: number
+}
+
 export async function getEvents(params?: {
   drillId?: string
   severity?: EventSeverity
   limit?: number
-}): Promise<ServiceResult<EventLogItem[]>> {
+  /** ISO timestamp cursor — fetch events older than this timestamp */
+  before?: string
+}): Promise<ServiceResult<EventPage>> {
   const supabase = await createClient()
+  const limit = params?.limit ?? PAGE_SIZE
+
   let q = supabase
     .from('event_log')
-    .select('id, event_type, mode, drill_id, user_id, severity, title, description, timestamp')
+    .select('id, event_type, mode, drill_id, user_id, severity, title, description, timestamp', { count: 'exact' })
     .order('timestamp', { ascending: false })
-    .limit(params?.limit ?? 50)
+    .limit(limit + 1) // fetch one extra to determine if there's a next page
 
   if (params?.drillId) q = q.eq('drill_id', params.drillId)
   if (params?.severity) q = q.eq('severity', params.severity)
+  if (params?.before) q = q.lt('timestamp', params.before)
 
-  const { data, error } = await q
+  const { data, error, count } = await q
   if (error) return fail('database_error', error.message)
-  return ok((data ?? []) as EventLogItem[])
+
+  const rows = (data ?? []) as EventLogItem[]
+  const hasMore = rows.length > limit
+  const items = hasMore ? rows.slice(0, limit) : rows
+  const nextCursor = hasMore ? items[items.length - 1].timestamp ?? null : null
+
+  return ok({ items, nextCursor, total: count ?? items.length })
 }
 
 export async function logEvent(params: {

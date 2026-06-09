@@ -466,16 +466,16 @@ export function MethaneIntake({ data, setView, fireEvent }: { data: Data; setVie
 
   const [form, setForm] = useState({
     major_incident: false,
-    incident_type: 'น้ำท่วม',
+    incident_type: '',
     exact_location: '',
-    mechanism: 'น้ำท่วมฉับพลัน + คนติดอยู่',
-    hazards: ['น้ำท่วม', 'กระแสน้ำ'],
-    access: 'เส้นทางหลักปิด · เรือเท่านั้น · จุดนัดพบ: ท่าน้ำวัดไก่เตี้ย',
-    casualties: { p1: 8, p2: 24, p3: 47, black: 3, unknown: 0 },
-    services: ['พยาบาลระดับสูง', 'USAR', 'เรือกู้ภัย'],
+    mechanism: '',
+    hazards: [] as string[],
+    access: '',
+    casualties: { p1: 0, p2: 0, p3: 0, black: 0, unknown: 0 },
+    services: [] as string[],
     lead_org: appCtx?.organizationName ?? '',
     initial_command_mode: 'unified' as 'unified' | 'single' | 'joint',
-    safety_gates: { zone: 'warm' as const, route: 'pending' as const, security: 'passed' as const, hospital: 'pending' as const, authority: 'passed' as const },
+    safety_gates: { zone: 'pending' as const, route: 'pending' as const, security: 'pending' as const, hospital: 'pending' as const, authority: 'pending' as const },
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -760,43 +760,38 @@ export function FacilityCoord({ data, fireEvent }: { data: Data; fireEvent: Fire
       </div>
       <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 12 }}>
         <Panel title="จับคู่ผู้ป่วย → โรงพยาบาล" count={data.patient_markers.length} actions={<button className="btn sm ghost">จัดเส้นทางอัตโนมัติ</button>}>
-          <table className="tbl">
-            <thead><tr><th>ผู้ป่วย</th><th>คัดแยก</th><th>จุด</th><th>ต้องการ</th><th>แนะนำปลายทาง</th><th>สถานะ</th><th>ETA</th></tr></thead>
-            <tbody>
-              {[
-                { id: 'PAT-022', site: 'SITE-B', lvl: 'P1', needs: 'เลือดออกมาก, ผ่าตัด', rec: 'รามาธิบดี (Role 3)', status: 'transporting', eta: '8 นาที' },
-                { id: 'PAT-019', site: 'SITE-A', lvl: 'P1', needs: 'ทางเดินหายใจ, ICU', rec: 'จุฬาฯ (Role 3)', status: 'transporting', eta: '12 นาที' },
-                { id: 'PAT-015', site: 'CCP-1', lvl: 'P2', needs: 'กระดูกต้นขาหัก', rec: 'ศิริราช (Role 2) ⚠', status: 'redirect', eta: '—' },
-                { id: 'PAT-008', site: 'SITE-B', lvl: 'P3', needs: 'บาดแผลเล็กน้อย', rec: 'CCP-1 / Role 1', status: 'on_scene', eta: '' },
-              ].map(p => (
-                <tr key={p.id}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{p.id}</td>
-                  <td><Triage level={p.lvl}/></td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{p.site}</td>
-                  <td>{p.needs}</td>
-                  <td>{p.rec}</td>
-                  <td><StatusBadge status={p.status} label={p.status === 'redirect' ? 'เปลี่ยนทาง' : p.status === 'transporting' ? 'กำลังส่ง' : p.status === 'on_scene' ? 'อยู่หน้างาน' : p.status}/></td>
-                  <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>{p.eta ? 'ETA ' + p.eta : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {data.patient_markers.length === 0 ? (
+            <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+              ยังไม่มีผู้ป่วยที่ต้องจัดสรร
+            </div>
+          ) : (
+            <table className="tbl">
+              <thead><tr><th>ผู้ป่วย</th><th>คัดแยก</th><th>สถานะ</th></tr></thead>
+              <tbody>
+                {data.patient_markers.map((p: any) => (
+                  <tr key={p.id}>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{p.patient_code ?? p.id}</td>
+                    <td><Triage level={(p.lvl ?? p.triage_level ?? 'P3').toUpperCase()}/></td>
+                    <td><StatusBadge status={p.status} label={p.status}/></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Panel>
         <Panel title="โหมดการขนส่ง">
           <div style={{ display: 'grid', gap: 8 }}>
-            {[
-              { icon: 'truck', name: 'ALS รถพยาบาลชั้นสูง', count: '8 / 12', status: 'active' },
-              { icon: 'boat', name: 'เรือพยาบาล', count: '3 / 6', status: 'active' },
-              { icon: 'helicopter', name: 'HEMS / MEDEVAC', count: '1 / 2', status: 'pending' },
-              { icon: 'drone', name: 'UAV ขนส่งเสบียง', count: '2 / 2', status: 'active' },
-            ].map((t, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+            {data.teams
+              .filter((t: any) => ['en_route', 'on_scene', 'available'].includes(t.status))
+              .slice(0, 6)
+              .map((t: any) => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
                 <div style={{ width: 36, height: 36, background: 'var(--bg-1)', borderRadius: 6, display: 'grid', placeItems: 'center', border: '1px solid var(--border)' }}>
-                  <Icon name={t.icon} size={18} color="var(--cyan)"/>
+                  <Icon name={t.type === 'medical' ? 'truck' : t.type === 'water' ? 'boat' : t.type === 'air' ? 'helicopter' : 'truck'} size={18} color="var(--cyan)"/>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>{t.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{t.count} พร้อมใช้งาน</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>{t.code}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{t.personnel ?? 0} คน · {t.org}</div>
                 </div>
                 <StatusBadge status={t.status} label={t.status === 'active' ? 'พร้อม' : 'รอคิว'}/>
               </div>

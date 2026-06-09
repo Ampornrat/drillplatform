@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from './icon';
 
 type Data = any;
@@ -8,10 +8,20 @@ interface FieldMobileProps { data: Data; fireEvent: (e: any) => void; }
 
 export function FieldMobile({ data, fireEvent }: FieldMobileProps) {
   const [tab, setTab] = useState('triage');
-  const [pos] = useState({ lat: '13.7775', lng: '100.4582' });
+  const [pos, setPos] = useState<{ lat: string; lng: string } | null>(null);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (p) => setPos({ lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6) }),
+      () => setPos(null),
+      { timeout: 5000 },
+    );
+  }, []);
 
   const submitTriage = () => {
-    fireEvent({ severity: 'info', title: 'ส่งการคัดแยกผู้ป่วยสำเร็จ', body: 'PAT-2026-0847-024 · P1 · MED-ALPHA' });
+    const incidentCode = data?.incident?.code ?? '';
+    fireEvent({ severity: 'info', title: 'ส่งการคัดแยกผู้ป่วยสำเร็จ', body: `${incidentCode} · คัดแยกแล้ว` });
   };
 
   return (
@@ -29,7 +39,7 @@ export function FieldMobile({ data, fireEvent }: FieldMobileProps) {
           border: '1px solid rgba(255,255,255,0.08)', minHeight: 820,
           display: 'flex', flexDirection: 'column',
         }}>
-          <FieldStatusHeader />
+          <FieldStatusHeader data={data} />
           <FieldTabSwitcher tab={tab} setTab={setTab} />
           <div style={{ padding: '0 16px 24px 16px', color: '#0e1525', flex: 1 }}>
             {tab === 'triage' && <TriageScreen onSubmit={submitTriage} pos={pos} />}
@@ -75,13 +85,13 @@ function FeatureRow({ icon, title, body }: { icon: string; title: string; body: 
   );
 }
 
-function FieldStatusHeader() {
+function FieldStatusHeader({ data }: { data: any }) {
   return (
     <div style={{ paddingTop: 50, padding: '50px 16px 8px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: '#677489', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>โหมดปฏิบัติการ · INC-2026-0847</div>
-          <div style={{ fontSize: 15, color: '#0e1525', marginTop: 2, fontWeight: 600 }}>น้ำท่วม + MCI ตลิ่งชัน</div>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: '#677489', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>โหมดปฏิบัติการ · {data?.incident?.code ?? '—'}</div>
+          <div style={{ fontSize: 15, color: '#0e1525', marginTop: 2, fontWeight: 600 }}>{data?.incident?.title_th ?? 'ปฏิบัติการ'}</div>
         </div>
         <div style={{ padding: '4px 9px', background: '#d1fae5', borderRadius: 50, fontSize: 10, color: '#059669', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700, border: '1px solid rgba(5, 150, 105, 0.2)' }}>
           <span style={{ width: 5, height: 5, borderRadius: 50, background: '#059669' }} />
@@ -117,7 +127,7 @@ function FieldTabSwitcher({ tab, setTab }: { tab: string; setTab: (t: string) =>
   );
 }
 
-function TriageScreen({ onSubmit, pos }: { onSubmit: () => void; pos: { lat: string; lng: string } }) {
+function TriageScreen({ onSubmit, pos }: { onSubmit: () => void; pos: { lat: string; lng: string } | null }) {
   const [level, setLevel] = useState('P1');
   const [march, setMarch] = useState<Record<string, boolean>>({ M: true, A: true, R: false, C: false, H: false });
 
@@ -125,8 +135,10 @@ function TriageScreen({ onSubmit, pos }: { onSubmit: () => void; pos: { lat: str
     <div>
       <div style={{ padding: '10px 12px', background: '#ffffff', border: '1px solid #e3e7ee', borderRadius: 10, marginBottom: 14 }}>
         <div style={{ fontSize: 10, color: '#677489', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>รหัสผู้ป่วย</div>
-        <div style={{ fontSize: 17, fontFamily: 'var(--font-mono)', color: '#0e1525', fontWeight: 600, marginTop: 2 }}>PAT-2026-0847-024</div>
-        <div style={{ fontSize: 10.5, color: '#677489', marginTop: 4 }}>GPS · {pos.lat}°N · {pos.lng}°E · ±4 ม. · SITE-B</div>
+        <div style={{ fontSize: 17, fontFamily: 'var(--font-mono)', color: '#0e1525', fontWeight: 600, marginTop: 2 }}>— ระบุรหัสผู้ป่วย —</div>
+        <div style={{ fontSize: 10.5, color: '#677489', marginTop: 4 }}>
+          {pos ? `GPS · ${pos.lat}°N · ${pos.lng}°E` : 'GPS · กำลังรับสัญญาณ…'}
+        </div>
       </div>
 
       <div style={{ fontSize: 11, color: '#677489', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', marginBottom: 6, fontWeight: 600 }}>ระดับคัดแยก</div>
@@ -209,7 +221,7 @@ function TriageScreen({ onSubmit, pos }: { onSubmit: () => void; pos: { lat: str
   );
 }
 
-function CheckInScreen({ pos }: { pos: { lat: string; lng: string } }) {
+function CheckInScreen({ pos }: { pos: { lat: string; lng: string } | null }) {
   return (
     <div>
       <div style={{ padding: '10px 12px', background: '#e0f6fc', border: '1px solid rgba(8, 145, 178, 0.25)', borderRadius: 10, marginBottom: 14 }}>

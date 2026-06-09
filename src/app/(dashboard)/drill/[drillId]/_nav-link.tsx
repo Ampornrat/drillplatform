@@ -2,21 +2,27 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, FlaskConical } from 'lucide-react'
+import { LayoutDashboard, FlaskConical, Target, FileBarChart2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Props {
   drillId: string
   drillTitle: string
   userName: string | null
+  activeScenarioId?: string | null
 }
 
-export default function DrillSidebarNav({ drillId, drillTitle, userName }: Props) {
+export default function DrillSidebarNav({ drillId, activeScenarioId }: Props) {
   const pathname = usePathname()
 
   const items = [
     { href: `/drill/${drillId}/dashboard`,        label: 'Dashboard',        Icon: LayoutDashboard },
     { href: `/drill/${drillId}/scenario-builder`, label: 'Scenario Builder', Icon: FlaskConical },
+    ...(activeScenarioId
+      ? [{ href: `/drill/evaluation/${activeScenarioId}`, label: 'Evaluation', Icon: Target }]
+      : []
+    ),
+    { href: `/drill/aar/${drillId}`, label: 'AAR / LMS', Icon: FileBarChart2 },
   ]
 
   return (

@@ -271,6 +271,117 @@ export const upsertGateSchema = z.object({
 })
 export type UpsertGateInput = z.infer<typeof upsertGateSchema>
 
+// ── Field: Check-in ──────────────────────────────────────────────────────────
+
+export const fieldCheckinSchema = z.object({
+  drill_id: z.string().uuid('ต้องระบุ Drill'),
+  status: z.enum(['available', 'deployed', 'on_scene', 'completed']),
+  lat: z.coerce.number().optional(),
+  lng: z.coerce.number().optional(),
+  accuracy: z.coerce.number().optional(),
+  location_name: z.string().optional(),
+  notes: z.string().optional(),
+})
+export type FieldCheckinInput = z.infer<typeof fieldCheckinSchema>
+
+/** Supply request from field with destination + needed_at. */
+export const fieldSupplyRequestSchema = z.object({
+  drill_id: z.string().uuid('ต้องระบุ Drill'),
+  item_name: z.string().min(1, 'ระบุชื่อสิ่งของ'),
+  quantity: z.coerce.number().int().min(1, 'จำนวนต้องมากกว่า 0'),
+  unit: z.string().min(1, 'ระบุหน่วย'),
+  priority: z.enum(['routine', 'urgent', 'immediate']).default('routine'),
+  destination: z.string().optional(),
+  needed_at: z.string().optional(),
+  notes: z.string().optional(),
+})
+export type FieldSupplyRequestInput = z.infer<typeof fieldSupplyRequestSchema>
+
+/** Evaluator observation / finding (field mobile form). */
+export const evaluatorObservationSchema = z.object({
+  drill_id: z.string().uuid('ต้องระบุ Drill'),
+  scenario_id: z.string().uuid().optional(),
+  metric_code: z.string().min(1, 'ระบุรหัส Metric'),
+  subject_ref: z.string().min(1, 'ระบุ Subject'),
+  result: z.enum(['pass', 'gap', 'fail']),
+  score: z.coerce.number().min(0).max(10).optional(),
+  finding: z.string().min(1, 'ระบุรายละเอียดที่พบ'),
+  evidence_event_ids: z.string().optional(),
+})
+export type EvaluatorObservationInput = z.infer<typeof evaluatorObservationSchema>
+
+/** Full evaluator observation from the Evaluation Dashboard (desktop). */
+export const submitObservationFullSchema = z.object({
+  scenario_id: z.string().uuid('ต้องระบุ Scenario'),
+  metric_code: z.string().min(1, 'ระบุรหัส Metric'),
+  subject_ref: z.string().min(1, 'ระบุ Subject เช่น PAT-001 / Team 3B'),
+  result: z.enum(['pass', 'gap', 'fail']),
+  score: z.coerce.number().min(0).max(5).optional(),
+  finding: z.string().min(1, 'ระบุรายละเอียดที่พบ'),
+  evidence_event_ids: z.array(z.string().uuid()).default([]),
+  recommended_action: z.string().optional(),
+  root_cause: z.string().optional(),
+  severity: z.enum(['info', 'warning', 'critical']).default('info'),
+})
+export type SubmitObservationFullInput = z.infer<typeof submitObservationFullSchema>
+
+/** Submit aggregate metric score for one of the 6 core metrics. */
+export const submitMetricScoreSchema = z.object({
+  drill_id: z.string().uuid('ต้องระบุ Drill'),
+  session_id: z.string().uuid().optional(),
+  metric_id: z.string().min(1, 'ระบุ metric_code'),
+  metric_name: z.string().min(1),
+  category: z.string().min(1),
+  score: z.coerce.number().min(0).max(5),
+  max_score: z.coerce.number().min(1).default(5),
+  notes: z.string().optional(),
+})
+export type SubmitMetricScoreInput = z.infer<typeof submitMetricScoreSchema>
+
+// ── AAR Improvement Actions ──────────────────────────────────────────────────
+
+export const createImprovementActionSchema = z.object({
+  aar_report_id: z.string().uuid('ต้องระบุ AAR Report'),
+  finding_type: z.string().optional(),
+  finding_code: z.string().optional(),
+  category: z.enum(['strength', 'area_for_improvement', 'sustain', 'improve']).default('area_for_improvement'),
+  description: z.string().min(1, 'ระบุรายละเอียด'),
+  recommendation: z.string().optional(),
+  root_cause: z.string().optional(),
+  recommended_track: z.string().optional(),
+  priority: z.enum(['low', 'medium', 'high']).default('medium'),
+  severity: z.enum(['info', 'warning', 'critical']).default('warning'),
+  responsible_party: z.string().optional(),
+  owner_id: z.string().uuid().optional(),
+  due_date: z.string().optional(),
+  evidence_event_ids: z.array(z.string().uuid()).default([]),
+  lms_course: z.string().optional(),
+})
+export type CreateImprovementActionInput = z.infer<typeof createImprovementActionSchema>
+
+export const proposeSopUpdateSchema = z.object({
+  drill_id: z.string().uuid('ต้องระบุ Drill'),
+  aar_report_id: z.string().uuid().optional(),
+  finding_id: z.string().uuid().optional(),
+  sop_code: z.string().optional(),
+  title: z.string().min(1, 'ระบุชื่อ SOP'),
+  description: z.string().min(1, 'ระบุรายละเอียดการเปลี่ยนแปลง'),
+  change_type: z.enum(['create', 'update', 'retire', 'review']).default('update'),
+  priority: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
+})
+export type ProposeSopUpdateInput = z.infer<typeof proposeSopUpdateSchema>
+
+export const scenarioBankUpdateSchema = z.object({
+  drill_id: z.string().uuid('ต้องระบุ Drill'),
+  aar_report_id: z.string().uuid().optional(),
+  title: z.string().min(1, 'ระบุชื่อ'),
+  summary: z.string().optional(),
+  lessons_learned: z.string().optional(),
+  difficulty_adj: z.enum(['easier', 'same', 'harder']).optional(),
+  finding_codes: z.array(z.string()).default([]),
+})
+export type ScenarioBankUpdateInput = z.infer<typeof scenarioBankUpdateSchema>
+
 // ── Status transition ────────────────────────────────────────────────────────
 
 export const updateDrillStatusSchema = z.object({

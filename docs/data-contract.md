@@ -1,8 +1,25 @@
 # Data Contract Reference
 
-> Generated: 2026-06-02  
+> Updated: 2026-06-09 (Prompt 19)  
 > Principle: UI components never read raw database columns directly.  
-> All data flows through a contract type. All mutations are validated by a Zod schema before reaching the database.
+> All data flows through a contract type. All mutations are validated by a Zod schema before reaching the database.  
+> **Mock data removed**: production components no longer fall back to `DEMO_DATA`. Empty state is shown when the DB has no data.
+
+## Pagination Contract (event_log)
+
+```typescript
+interface EventPage {
+  items: EventLogItem[]
+  nextCursor: string | null  // ISO timestamp — pass as `before` for next page
+  total: number
+}
+```
+
+Usage:
+```typescript
+const first = await getEvents({ drillId, limit: 50 })
+const next  = await getEvents({ drillId, limit: 50, before: first.data.nextCursor })
+```
 
 ---
 

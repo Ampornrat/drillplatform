@@ -169,14 +169,24 @@ function computeMetricsDrill(patients: IodpPatient[], teams: IodpTeam[], injects
   ]
 }
 
+const EMPTY_INCIDENT = {
+  code: '—', title_th: 'ยังไม่มีเหตุการณ์', title_en: '', type: '—',
+  response_level: '—', command_mode: '—', lead_org: '—', status: 'planned',
+  op_period: '—', iap_version: '—', started: 'T+00:00',
+  location: { lat: null, lng: null },
+}
+
+const EMPTY_DRILL = {
+  code: '—', title_th: 'ยังไม่มีการฝึก', title_en: '', type: '—',
+  teams: 0, casualties_total: 0, sim_clock: 'T+00:00', sim_status: 'planned',
+}
+
 function buildAppData(
   opSession: IodpSession | null,
   drillSession: IodpSession | null,
   opData: DbData | null,
   drillData: DbData | null,
 ): typeof DEMO_DATA {
-  if (!opSession && !drillSession) return DEMO_DATA as typeof DEMO_DATA
-
   const activeOpData = opData ?? { sites: [], teams: [], patients: [], events: [], gates: [], injects: [], aarFindings: [] }
   const activeDrillData = drillData ?? { sites: [], teams: [], patients: [], events: [], gates: [], injects: [], aarFindings: [] }
 
@@ -196,27 +206,27 @@ function buildAppData(
     code: opSession.code,
     title_th: opSession.title_th,
     title_en: opSession.title_en ?? '',
-    type: opSession.scenario_type ?? 'Flood / Mass Casualty',
-    response_level: opSession.meta?.response_level ?? 'REGIONAL',
-    command_mode: opSession.meta?.command_mode ?? 'JOINT',
-    lead_org: opSession.meta?.lead_org ?? 'Bangkok EOC',
+    type: opSession.scenario_type ?? '—',
+    response_level: opSession.meta?.response_level ?? '—',
+    command_mode: opSession.meta?.command_mode ?? '—',
+    lead_org: opSession.meta?.lead_org ?? '—',
     status: opSession.status,
-    op_period: opSession.op_period ?? 'OP-1',
-    iap_version: opSession.meta?.iap_version ?? 'v1.0',
+    op_period: opSession.op_period ?? '—',
+    iap_version: opSession.meta?.iap_version ?? '—',
     started: fmtTime(opSession.start_time),
     location: { lat: opSession.center_lat, lng: opSession.center_lng },
-  } : DEMO_DATA.incident
+  } : EMPTY_INCIDENT
 
   const drill = drillSession ? {
     code: drillSession.code,
     title_th: drillSession.title_th,
     title_en: drillSession.title_en ?? '',
-    type: drillSession.meta?.drill_type ?? 'full_scale',
-    teams: activeDrillData.teams.length || 20,
-    casualties_total: activeDrillData.patients.length || 240,
-    sim_clock: 'T+01:35',
+    type: drillSession.meta?.drill_type ?? '—',
+    teams: activeDrillData.teams.length,
+    casualties_total: activeDrillData.patients.length,
+    sim_clock: 'T+00:00',
     sim_status: drillSession.status === 'active' ? 'live' : drillSession.status,
-  } : DEMO_DATA.drill
+  } : EMPTY_DRILL
 
   return {
     ...DEMO_DATA,
@@ -225,11 +235,11 @@ function buildAppData(
     sites,
     patient_markers: patientMarkers,
     teams,
-    facilities: facilities.length ? facilities : DEMO_DATA.facilities,
-    events: events.length ? events : DEMO_DATA.events,
-    safety_gates: gates.length ? gates : DEMO_DATA.safety_gates,
-    drill_injects: drillInjects.length ? drillInjects : DEMO_DATA.drill_injects,
-    aar_findings: aarFindings.length ? aarFindings : DEMO_DATA.aar_findings,
+    facilities,
+    events,
+    safety_gates: gates,
+    drill_injects: drillInjects,
+    aar_findings: aarFindings,
     metrics_op: metricsOp,
     metrics_drill: metricsDrill,
   } as typeof DEMO_DATA

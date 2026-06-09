@@ -15,9 +15,9 @@ export async function checkSafetyGates(
     .eq('drill_id', drillId)
     .eq('status', 'failed')
   if (error) return fail('database_error', error.message)
-  const blockedGates = (failed ?? []).map((g: any) => ({
+  const blockedGates = (failed ?? []).map((g: { rule_id: string; safety_gate_rules: unknown }) => ({
     id: g.rule_id,
-    title: (g.safety_gate_rules as any)?.name ?? g.rule_id,
+    title: (g.safety_gate_rules as { name?: string })?.name ?? g.rule_id,
   }))
   return ok({ passed: blockedGates.length === 0, blockedGates })
 }
@@ -137,7 +137,7 @@ export async function updateAssignmentStatus(
   newStatus: string
 ): Promise<ServiceResult<true>> {
   const supabase = await createClient()
-  const update: Record<string, any> = { status: newStatus }
+  const update: Record<string, unknown> = { status: newStatus }
   if (newStatus === 'released') update.released_at = new Date().toISOString()
 
   const { error } = await supabase
