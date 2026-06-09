@@ -25,6 +25,21 @@ export async function getSimClockState(
     .single()
 
   if (error || !data) {
+    // Table might not be deployed yet — return a default standby clock
+    if (error?.message?.includes('schema cache') || error?.message?.includes('does not exist')) {
+      return ok({
+        id: 'pending',
+        scenario_id: scenarioId,
+        status: 'standby' as SimClockStatus,
+        elapsed_seconds: 0,
+        speed_multiplier: 1,
+        started_at: null,
+        paused_at: null,
+        last_tick_at: null,
+        notes: null,
+        updated_at: '1970-01-01T00:00:00.000Z',
+      })
+    }
     // Auto-create on first access
     const { data: created, error: createErr } = await supabase
       .from('sim_clock_state')
